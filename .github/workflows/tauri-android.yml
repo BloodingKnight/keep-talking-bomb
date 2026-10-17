@@ -63,6 +63,15 @@ jobs:
         working-directory: src-tauri
         run: cargo tauri icon logo.png
 
+      # 桌面版的资源（node.exe 与 server/lib/client）在 tauri.conf.json 里是 glob，
+      # 安卓用不到这些（手机上跑不了 node.exe），但 Tauri 要求 glob 至少匹配到一个文件，
+      # 否则直接报 "glob pattern bundle-assets/**/* path not found"。放一个占位文件即可。
+      - name: 占位（避免资源 glob 匹配不到）
+        run: |
+          mkdir -p src-tauri/bundle-assets
+          echo "android build does not bundle node.exe" > src-tauri/bundle-assets/ANDROID.txt
+          ls -la src-tauri/bundle-assets
+
       - name: 初始化 Android 工程
         working-directory: src-tauri
         run: cargo tauri android init --ci
