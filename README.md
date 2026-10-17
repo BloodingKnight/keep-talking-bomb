@@ -439,6 +439,33 @@ node tools/build-portable.mjs
 > 打包机的 Node 版本就是玩家用的版本（直接取 `process.execPath`）。
 > `dist/` 已在 `.gitignore` 里，90 MB 的 node.exe 不会进仓库。
 
+### 静态托管（EdgeOne Pages / GitHub Pages）：放客户端，API 打回房主
+
+先说清楚一个容易误会的地方：**localStorage 不能用来同步房间**。它是「每个设备、每个域名各自一份」，
+两台手机就算填同一个房间号，也是两个互不相干的缓存 —— 房间号只是个标签，没有传输通道。
+房间状态、倒计时、失误次数、模块判定**必须有一处共享的存储**，这就是服务端存在的原因。
+
+但静态托管依然很有用：把**客户端页面**放到国内访问快的 CDN（EdgeOne Pages 比 GitHub Pages 稳），
+让页面的 `/api/*` 与 SSE **跨域打回房主那台机器**（局域网地址或隧道地址）。服务端已经开了 CORS。
+
+```bash
+node tools/build-static-site.mjs      # -> site/（index.html + static/*）
+```
+
+EdgeOne Pages 配置：**构建命令** `node tools/build-static-site.mjs`，**输出目录** `site`，
+框架选"静态/其他"。部署完打开时带上房主地址（会记住，之后不用再填）：
+
+```
+https://你的域名.edgeone.app/?server=https://xxxx.trycloudflare.com
+```
+
+也可以先在页面里填（静态托管版会显示「连接到房主的游戏」）。
+**大厅里的邀请二维码会自动带上 `&server=`**，所以朋友扫码进来也能自己连上房主 —— 这点有测试守着。
+
+> 想彻底摆脱"房主电脑必须开着"：
+> ① 把服务端部署到云主机（`Dockerfile`，最稳）；② 把服务端搬到边缘函数 + KV（要重写，SSE 改轮询）；
+> ③ 改成浏览器 P2P（WebRTC，房主的浏览器当服务端，同样是一次重写）。
+
 ### 方式四：公网在线版（发个链接就能玩，异地也行）
 
 服务端读 `PORT` 环境变量、支持 `BOMB_ADMIN_TOKEN`，所以任何能跑容器的平台都能直接部署：

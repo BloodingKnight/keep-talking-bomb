@@ -221,6 +221,19 @@ console.log('\n— 邀请链接 —');
   });
   if (lanStill === 'http://192.168.1.7:3210/?room=ABCD') ok('本地打开时仍然优先局域网 IP（手机扫得到）');
   else fail(`本地打开时没有优先局域网 IP：${lanStill}`);
+
+  // 静态托管（EdgeOne）：页面在 CDN 上，房主机器在别处 —— 邀请链接必须带上 server
+  const edge = invite.inviteUrl({
+    network: { urls: ['192.168.1.7'], port: 3210 },
+    roomCode: 'ABCD',
+    origin: 'https://demo.edgeone.app',
+    server: 'https://silly-cats-jump-here.trycloudflare.com',
+  });
+  const want =
+    'https://demo.edgeone.app/?room=ABCD&server=https%3A%2F%2Fsilly-cats-jump-here.trycloudflare.com';
+  if (edge === want) ok(`EdgeOne 场景下邀请链接带上了房主地址`);
+  else fail(`EdgeOne 邀请链接不对：\n        期望 ${want}\n        实际 ${edge}`);
+  if (encode(edge).size > 0) ok('这种带两个参数的邀请链接仍然能编码成二维码');
 }
 
 // ---------------------------------------------------------------- 服务端 network 信息

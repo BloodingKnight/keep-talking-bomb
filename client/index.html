@@ -35,6 +35,22 @@
   </header>
 
   <main>
+    <!-- 静态托管（EdgeOne / GitHub Pages）时用来填房主地址 -->
+    <section id="server-gate" class="stage hidden">
+      <div class="panel" style="max-width:560px;margin:40px auto">
+        <h2>连接到房主的游戏</h2>
+        <p class="muted" id="gate-hint">这个页面是静态托管版，需要告诉它房主的游戏地址。</p>
+        <label>房主地址
+          <input id="gate-server" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://xxxx.trycloudflare.com 或 http://192.168.1.7:3210" />
+        </label>
+        <div class="row">
+          <button id="gate-go" class="primary">连接</button>
+        </div>
+        <p class="muted small" style="margin-top:12px">
+          房主那边启动游戏后，窗口里会打印地址；异地玩就用 <code>node tools/share.mjs</code> 生成的公网链接。
+        </p>
+      </div>
+    </section>
     <!-- ============================ JOIN ============================ -->
     <section id="stage-join" class="stage">
       <div class="panel join-panel">

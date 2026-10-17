@@ -584,6 +584,23 @@ const routes = {
 // ------------------------------------------------------------------- server
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+  // 允许客户端被放到别的域（EdgeOne Pages / GitHub Pages 静态托管，API 指回这里）。
+  // 我们不用 cookie 做身份（房间号+玩家 id 都走 query/body），所以放开 * 是安全的。
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'origin');
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+    res.setHeader('access-control-allow-headers', 'content-type');
+    res.setHeader('access-control-max-age', '86400');
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   const key = `${req.method} ${url.pathname}`;
 
   if (routes[key]) {

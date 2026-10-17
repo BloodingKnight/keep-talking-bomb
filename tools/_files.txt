@@ -50,6 +50,7 @@ tests/bench.mjs
 tests/blind.mjs
 tests/bugs.mjs
 tests/client.mjs
+tests/cors.mjs
 tests/deafsee.mjs
 tests/e2e.mjs
 tests/qr.mjs
@@ -67,6 +68,7 @@ tools/_release111.mjs
 tools/_release113.mjs
 tools/build-portable.mjs
 tools/build-single.mjs
+tools/build-static-site.mjs
 tools/check-live.mjs
 tools/check-maze.mjs
 tools/extract-pdf.mjs

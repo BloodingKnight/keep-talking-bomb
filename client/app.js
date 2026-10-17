@@ -30,8 +30,44 @@ const app = {
 };
 
 // ------------------------------------------------------------------ helpers
+
+// 静态托管（EdgeOne Pages / GitHub Pages）时，页面和 API 不同源：
+//   用  index.html?server=https://xxx.trycloudflare.com  打开一次，地址会记住
+// 同源部署（直接跑 server.js / 单文件 exe）时 API_BASE 为空，行为和以前完全一样。
+const SERVER_KEY = 'bomb:server';
+
+function normalizeServer(raw) {
+  const v = String(raw || '').trim();
+  if (!v) return '';
+  const withScheme = /^https?:\/\//i.test(v) ? v : `http://${v}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return u.origin;
+  } catch {
+    return '';
+  }
+}
+
+function resolveServer() {
+  const url = new URL(location.href);
+  const fromQuery = normalizeServer(url.searchParams.get('server'));
+  if (fromQuery) {
+    try { localStorage.setItem(SERVER_KEY, fromQuery); } catch { /* private mode */ }
+    return fromQuery;
+  }
+  try {
+    return normalizeServer(localStorage.getItem(SERVER_KEY));
+  } catch {
+    return '';
+  }
+}
+
+const API_BASE = resolveServer();
+const apiUrl = (p) => `${API_BASE}${p}`;
+
 async function api(path, body) {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body || {}),
@@ -71,7 +107,7 @@ function restoreSession() {
 // -------------------------------------------------------------------- stream
 function subscribe() {
   if (app.es) { try { app.es.close(); } catch { /* ignore */ } }
-  const url = `/api/events?room=${encodeURIComponent(app.roomCode)}&player=${encodeURIComponent(app.playerId)}`;
+  const url = `${apiUrl('/api/events')}?room=${encodeURIComponent(app.roomCode)}&player=${encodeURIComponent(app.playerId)}`;
   const es = new EventSource(url);
   app.es = es;
   es.onopen = () => { app.reconnects = 0; setLinkStatus(true); };
@@ -176,7 +212,8 @@ async function boot() {
 
 async function loadCatalog() {
   try {
-    const res = await fetch('/api/rooms').then((r) => r.json());
+    const res = await fetch(apiUrl('/api/rooms')).then((r) => r.json());
+    if (!res || !Array.isArray(res.rooms)) throw new Error('服务器返回的内容不认识');
     app.catalog = res;
     const sel = $('#set-difficulty');
     clear(sel);
@@ -184,7 +221,45 @@ async function loadCatalog() {
     sel.value = 'normal';
     updateDiffDesc();
     renderRoomList(res.rooms);
-  } catch { /* offline */ }
+  } catch (e) {
+    // 静态托管但没配置服务端地址（或服务端没开）：给一个填地址的界面，而不是白屏
+    showServerGate(e);
+  }
+}
+
+async function showServerGate(err) {
+  const gate = $('#server-gate');
+  if (!gate) return;
+  gate.classList.remove('hidden');
+  for (const id of ['stage-join', 'stage-lobby', 'stage-game', 'stage-end']) {
+    document.getElementById(id)?.classList.add('hidden');
+  }
+  const hint = $('#gate-hint');
+  if (hint) {
+    hint.textContent = API_BASE
+      ? `连不上 ${API_BASE}（${err && err.message ? err.message : '网络错误'}）。检查房主那边的游戏是不是在跑、地址对不对。`
+      : '这个页面是静态托管版，需要告诉它房主的游戏地址。';
+  }
+  const input = $('#gate-server');
+  if (input && !input.value) input.value = API_BASE || '';
+  const go = $('#gate-go');
+  if (go && !go.dataset.bound) {
+    go.dataset.bound = '1';
+    go.addEventListener('click', () => {
+      const server = normalizeServer(input.value);
+      if (!server) {
+        $('#gate-hint').textContent = '地址看起来不对，应该像 http://192.168.1.7:3210 或 https://xxx.trycloudflare.com';
+        return;
+      }
+      try { localStorage.setItem(SERVER_KEY, server); } catch { /* ignore */ }
+      const url = new URL(location.href);
+      url.searchParams.set('server', server);
+      location.replace(url.toString());
+    });
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') go.click();
+    });
+  }
 }
 
 function renderRoomList(rooms) {
@@ -504,7 +579,7 @@ function renderLobby() {
 }
 
 function copyInvite() {
-  const url = inviteUrl({ network: app.catalog.network, roomCode: app.roomCode, origin: location.origin });
+  const url = inviteUrl({ network: app.catalog.network, roomCode: app.roomCode, origin: location.origin, server: API_BASE });
   navigator.clipboard?.writeText(url).then(
     () => toast('邀请链接已复制，发给队友即可'),
     () => toast(`邀请链接：${url}`, 5000),
@@ -522,6 +597,7 @@ function renderInvite() {
     network: app.catalog.network,
     roomCode: app.roomCode,
     origin: location.origin,
+    server: API_BASE,
   });
   card.classList.remove('hidden');
   link.textContent = url;

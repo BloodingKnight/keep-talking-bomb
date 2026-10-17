@@ -15,11 +15,15 @@ export function inviteUrl(o) {
   const lan = Array.isArray(net.urls) && net.urls.length ? net.urls[0] : null;
   const port = net.port || o.port || 3210;
 
+  // 静态托管（EdgeOne / Pages）时，页面所在域不是房主机器，
+  // 邀请链接必须把房主地址一起带上，否则朋友打开后连不上。
+  const serverParam = o.server ? `&server=${encodeURIComponent(o.server)}` : '';
+
   if (origin && !isLocalHost(hostOf(origin))) {
-    return `${origin}/?room=${o.roomCode}`;
+    return `${origin}/?room=${o.roomCode}${serverParam}`;
   }
   const base = lan ? `http://${lan}:${port}` : origin || `http://localhost:${port}`;
-  return `${base}/?room=${o.roomCode}`;
+  return `${base}/?room=${o.roomCode}${serverParam}`;
 }
 
 function hostOf(url) {

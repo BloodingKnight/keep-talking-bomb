@@ -9,6 +9,9 @@ dist/
 .build/
 .npmcache/
 
+# 静态站点产物（tools/build-static-site.mjs 生成的 site/）
+site/
+
 # Tauri 桌面版
 src-tauri/target/
 src-tauri/gen/
