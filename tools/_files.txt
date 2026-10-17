@@ -48,11 +48,13 @@ tests/qr.mjs
 tests/rooms.mjs
 tests/run-e2e.mjs
 tests/selftest.mjs
+tests/share.mjs
 tests/threemonkeys.mjs
 tests/tutorial.mjs
 tools/_files.txt
 tools/_gh-release.mjs
 tools/_push.mjs
+tools/_release110.mjs
 tools/build-portable.mjs
 tools/build-single.mjs
 tools/check-live.mjs
@@ -63,4 +65,5 @@ tools/lib-zip.mjs
 tools/make-icon.mjs
 tools/prepare-tauri-assets.mjs
 tools/probe-roles.mjs
+tools/share.mjs
 tools/verify-qr.mjs

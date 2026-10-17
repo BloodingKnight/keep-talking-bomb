@@ -335,6 +335,31 @@ node tests/run-e2e.mjs
 
 ## 分发：发给别人玩（不用装 Node）
 
+### 想立刻分享（家里没有公网 IP）
+
+游戏服务跑在你自己的电脑上，用一条隧道把它映射成公网地址即可，**不需要公网 IP、不用路由器端口映射**：
+
+```bash
+node tools/share.mjs            # 自动挑工具，端口默认 3210
+node tools/share.mjs 3210 --tool cloudflared
+```
+
+它会打印一个 `https://xxxx.trycloudflare.com` 之类的地址，发给朋友就能玩。三条路（脚本会自动按顺序试）：
+
+| 工具 | 要不要注册 | 说明 |
+|---|---|---|
+| **cloudflared** | 不用 | 最省事，`cloudflared tunnel --url http://127.0.0.1:3210` 就有公网 https 地址 |
+| ngrok | 要（免费） | `ngrok config add-authtoken <token>` 之后同样一条命令 |
+| localtunnel | 不用 | 纯 `npx localtunnel --port 3210`，不用装东西；首次访问可能要填一次密码（你自己的公网 IP） |
+
+国内网络如果下载 cloudflared 困难，用国内的内网穿透（natapp / cpolar / 花生壳）也一样，
+把隧道指向 `http://127.0.0.1:3210` 即可 —— 脚本能识别 cpolar / natapp 的地址格式。
+
+**关键细节**：用隧道地址打开游戏后，**大厅里的二维码会自动变成公网地址**（不再给局域网 IP），
+所以朋友扫码直接能进，不用你解释"要连同一个 Wi-Fi"。
+
+> 隧道地址每次重启都变。想要固定地址就往下看「公网在线版」，把服务部署到云主机。
+
 ### 方式一：单个 exe（最省事，面对面玩）
 
 ```bash

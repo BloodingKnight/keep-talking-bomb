@@ -1,12 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-//! Tauri 桌面外壳：启动内置的 Node 服务，再用一个真正的窗口加载 http://127.0.0.1:3210。
+//! Tauri 桌面外壳：启动内置的 Node 服务，再用真正的窗口加载它。
 //!
-//! 为什么要有这个壳：
-//!   - 单文件 exe 是"无窗口"的，用户看不到任何反馈，也没法好好关掉；
-//!   - 这里给出启动中的窗口、失败原因的窗口、以及关闭窗口即退出（同时结束 Node 子进程）。
+//! 设计要点（都是踩过的坑）：
+//!   - 资源目录在 NSIS / MSI / 开发模式下的位置不一样，所以按候选目录逐个找；
+//!   - 端口被占时自动往下试（3210、3211…），不再让用户改命令行；
+//!   - 失败时的错误窗口直接把"找到了哪些目录、node 日志最后几行"打出来，方便定位；
+//!   - 关窗口就结束 node 子进程，不留后台孤儿。
 
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread::sleep;
@@ -14,70 +16,175 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
-/// 内置 Node 子进程，退出时要一起结束，否则会留下看不见的进程。
 struct ServerProcess(Mutex<Option<Child>>);
 
-fn port() -> u16 {
-    std::env::var("BOMB_PORT")
-        .ok()
-        .and_then(|v| v.parse::<u16>().ok())
-        .unwrap_or(3210)
+/// 资源候选根目录（安装后 / 开发时 / MSI 与 NSIS 的布局差异）
+fn candidate_roots(app: &AppHandle) -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    let mut push = |p: PathBuf| {
+        if !roots.contains(&p) {
+            roots.push(p);
+        }
+    };
+    if let Ok(res) = app.path().resource_dir() {
+        push(res.join("resources"));
+        push(res.clone());
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            push(dir.join("resources"));
+            push(dir.to_path_buf());
+        }
+    }
+    // 开发模式：cargo tauri dev 的当前目录
+    if let Ok(cwd) = std::env::current_dir() {
+        push(cwd.join("bundle-assets"));
+        push(cwd.join("src-tauri").join("bundle-assets"));
+    }
+    roots
+}
+
+/// 在候选目录里找 bundle-assets 下的文件
+fn find_asset(app: &AppHandle, rel: &str) -> Option<PathBuf> {
+    for root in candidate_roots(app) {
+        for prefix in ["", "bundle-assets"] {
+            let p = if prefix.is_empty() {
+                root.join(rel)
+            } else {
+                root.join(prefix).join(rel)
+            };
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+/// 把候选目录里都有什么列出来（限深度 2，避免刷屏），用于错误提示
+fn describe_roots(app: &AppHandle) -> String {
+    let mut out = String::new();
+    for root in candidate_roots(app) {
+        out.push_str(&format!("· {}  ", root.display()));
+        if !root.exists() {
+            out.push_str("(不存在)\n");
+            continue;
+        }
+        out.push('\n');
+        let mut list_dir = |dir: &Path, depth: usize| {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                let mut names: Vec<String> = entries
+                    .filter_map(|e| e.ok())
+                    .map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        if e.path().is_dir() {
+                            format!("{name}/")
+                        } else {
+                            name
+                        }
+                    })
+                    .collect();
+                names.sort();
+                for name in names.into_iter().take(30) {
+                    out.push_str(&format!("    {}{}\n", "  ".repeat(depth), name));
+                }
+            }
+        };
+        list_dir(&root, 0);
+        // 再看一层（bundle-assets/ 之类）
+        for sub in ["bundle-assets", "resources"] {
+            let p = root.join(sub);
+            if p.is_dir() {
+                out.push_str(&format!("    {}/\n", sub));
+                list_dir(&p, 1);
+            }
+        }
+    }
+    out
 }
 
 fn port_open(p: u16) -> bool {
     TcpStream::connect(("127.0.0.1", p)).is_ok()
 }
 
-/// 资源目录里找 server.js / node.exe。
-/// 兼容两种布局：资源平铺（resources 映射成目标名）或保留 bundle-assets/ 前缀。
-fn resource_file(app: &AppHandle, rel: &str) -> Option<PathBuf> {
-    let root = app.path().resource_dir().ok()?;
-    let cands = [
-        root.join(rel),
-        root.join("bundle-assets").join(rel),
-        root.join("_up_").join(rel),
-    ];
-    cands.into_iter().find(|p: &PathBuf| p.exists())
+/// 端口被占用时自动往后找：3210 → 3240
+fn pick_port() -> u16 {
+    if let Ok(v) = std::env::var("BOMB_PORT") {
+        if let Ok(p) = v.parse::<u16>() {
+            return p;
+        }
+    }
+    (3210..=3240).find(|p| !port_open(*p)).unwrap_or(3210)
 }
 
-fn spawn_server(app: &AppHandle) -> Result<Child, String> {
-    let node = resource_file(app, "node.exe")
-        .ok_or_else(|| "安装包里找不到 node.exe".to_string())?;
-    let entry = resource_file(app, "server/server.js")
-        .ok_or_else(|| "安装包里找不到 server/server.js".to_string())?;
-
-    let log_dir = app
+fn log_path(app: &AppHandle) -> PathBuf {
+    let dir = app
         .path()
         .app_log_dir()
         .unwrap_or_else(|_| std::env::temp_dir().join("BombGame"));
-    let _ = std::fs::create_dir_all(&log_dir);
-    let log = std::fs::OpenOptions::new()
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("server.log")
+}
+
+fn log_tail(path: &Path, lines: usize) -> String {
+    match std::fs::read_to_string(path) {
+        Ok(text) => {
+            let all: Vec<&str> = text.lines().collect();
+            let start = all.len().saturating_sub(lines);
+            all[start..].join("\n")
+        }
+        Err(_) => "(没有日志)".to_string(),
+    }
+}
+
+fn spawn_server(app: &AppHandle, port: u16) -> Result<Child, String> {
+    let node = find_asset(app, "node.exe").ok_or_else(|| {
+        format!(
+            "安装包里找不到 node.exe。\n\n找过的目录：\n{}\n如果你是自己 git clone 的，先跑：\nnpm run tauri:assets",
+            describe_roots(app)
+        )
+    })?;
+    let entry = find_asset(app, "server/server.js").ok_or_else(|| {
+        format!(
+            "安装包里找不到 server/server.js。\n\n找过的目录：\n{}",
+            describe_roots(app)
+        )
+    })?;
+
+    let log_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log_dir.join("server.log"))
+        .open(log_path(app))
         .ok();
-    let (out, err) = match (log.as_ref(), log.as_ref()) {
-        (Some(a), Some(b)) => (
-            Stdio::from(a.try_clone().map_err(|e| e.to_string())?),
-            Stdio::from(b.try_clone().map_err(|e| e.to_string())?),
+    let (out, err) = match log_file.as_ref() {
+        Some(f) => (
+            Stdio::from(f.try_clone().map_err(|e| e.to_string())?),
+            Stdio::from(f.try_clone().map_err(|e| e.to_string())?),
         ),
-        _ => (Stdio::null(), Stdio::null()),
+        None => (Stdio::null(), Stdio::null()),
     };
 
-    let server_dir = entry
+    let work_dir = entry
         .parent()
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| entry.clone());
 
-    Command::new(node)
+    Command::new(&node)
         .arg(&entry)
-        .arg(port().to_string())
-        .current_dir(server_dir)
+        .arg(port.to_string())
+        .current_dir(work_dir)
         .stdout(out)
         .stderr(err)
         .spawn()
-        .map_err(|e| format!("启动内置 node 失败：{e}"))
+        .map_err(|e| {
+            format!(
+                "启动 node 失败：{e}\n\nnode.exe：{}\nserver.js：{}\n\n如果杀毒软件弹过拦截，请允许它运行。\n日志：{}",
+                node.display(),
+                entry.display(),
+                log_path(app).display()
+            )
+        })
 }
 
 fn show_error(app: &AppHandle, message: &str) {
@@ -87,11 +194,12 @@ fn show_error(app: &AppHandle, message: &str) {
         if let Some(splash) = handle.get_webview_window("splash") {
             let _ = splash.close();
         }
-        if let Ok(win) = WebviewWindowBuilder::new(&handle, "error", WebviewUrl::App("error.html".into()))
-            .title("BombGame 启动失败")
-            .inner_size(680.0, 420.0)
-            .center()
-            .build()
+        if let Ok(win) =
+            WebviewWindowBuilder::new(&handle, "error", WebviewUrl::App("error.html".into()))
+                .title("BombGame 启动失败")
+                .inner_size(760.0, 560.0)
+                .center()
+                .build()
         {
             if let Ok(json) = serde_json::to_string(&text) {
                 let _ = win.eval(&format!("document.getElementById('msg').textContent = {json};"));
@@ -104,7 +212,9 @@ fn main() {
     tauri::Builder::default()
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {
-            // 先把"正在启动"的窗口显示出来：用户马上知道程序确实在跑
+            let handle = app.handle().clone();
+
+            // 让用户"看得见"：先出一个启动中的窗口
             let _ = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("loading.html".into()))
                 .title("BombGame 正在启动")
                 .inner_size(520.0, 300.0)
@@ -112,12 +222,15 @@ fn main() {
                 .center()
                 .build();
 
-            let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let p = port();
-                // 端口已经有服务（比如之前没关干净的实例）就直接用它
-                if !port_open(p) {
-                    match spawn_server(&handle) {
+                // 已经有一份在跑（比如之前没关干净）就直接用它
+                let existing = (3210..=3240).find(|p| port_open(*p));
+                let port = match existing {
+                    Some(p) => p,
+                    None => pick_port(),
+                };
+                if existing.is_none() {
+                    match spawn_server(&handle, port) {
                         Ok(child) => {
                             *handle.state::<ServerProcess>().0.lock().unwrap() = Some(child);
                         }
@@ -129,21 +242,28 @@ fn main() {
                 }
 
                 let started = Instant::now();
-                while started.elapsed() < Duration::from_secs(25) && !port_open(p) {
+                while started.elapsed() < Duration::from_secs(30) && !port_open(port) {
                     sleep(Duration::from_millis(150));
                 }
-                if !port_open(p) {
+
+                if !port_open(port) {
+                    let log = log_path(&handle);
+                    let tail = log_tail(&log, 25);
                     show_error(
                         &handle,
                         &format!(
-                            "等待端口 {p} 超时（25 秒）。\n\n可能原因：\n1. 端口被别的程序占用\n2. 杀毒软件拦截了内置的 node.exe\n\n日志：{:?}",
-                            handle.path().app_log_dir()
+                            "端口 {port} 在 30 秒内没有起来。\n\n\
+                             ── node 输出的最后几行 ──\n{tail}\n\n\
+                             ── 安装目录里的资源 ──\n{}\n\
+                             ── 日志文件 ──\n{}",
+                            describe_roots(&handle),
+                            log.display()
                         ),
                     );
                     return;
                 }
 
-                let url = match format!("http://127.0.0.1:{p}/").parse() {
+                let url = match format!("http://127.0.0.1:{port}/").parse() {
                     Ok(u) => u,
                     Err(e) => {
                         show_error(&handle, &format!("地址不合法：{e}"));

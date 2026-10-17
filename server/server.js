@@ -655,4 +655,6 @@ server.listen(PORT, HOST, () => {
   console.log(`[bomb]   http://localhost:${PORT}/admin?token=${ADMIN_TOKEN}`);
   for (const ip of lan) console.log(`[bomb]   http://${ip}:${PORT}/admin?token=${ADMIN_TOKEN}`);
   console.log(`[bomb] 也可以用环境变量 BOMB_ADMIN_TOKEN 指定固定令牌`);
+  console.log('');
+  console.log(`[bomb] 想分享给外面的朋友（家里没有公网 IP）：node tools/share.mjs ${PORT}`);
 });

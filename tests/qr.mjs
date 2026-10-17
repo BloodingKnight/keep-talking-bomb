@@ -201,6 +201,26 @@ console.log('\n— 邀请链接 —');
   else fail(`邀请二维码地址不对：${url}`);
   const qr = encode(url);
   ok(`这个邀请地址能编码（v${qr.version}，${qr.size}x${qr.size}）`);
+
+  // 用隧道/公网地址打开时，二维码必须是公网地址（否则异地朋友扫了连不上）
+  const publicOrigin = invite.inviteUrl({
+    network: { urls: ['192.168.1.7'], port: 3210 },
+    roomCode: 'ABCD',
+    origin: 'https://silly-cats-jump-here.trycloudflare.com',
+  });
+  if (publicOrigin === 'https://silly-cats-jump-here.trycloudflare.com/?room=ABCD') {
+    ok(`用公网地址打开时，邀请用公网地址：${publicOrigin}`);
+  } else {
+    fail(`公网打开时邀请地址不对（会给出局域网地址，异地朋友连不上）：${publicOrigin}`);
+  }
+
+  const lanStill = invite.inviteUrl({
+    network: { urls: ['192.168.1.7'], port: 3210 },
+    roomCode: 'ABCD',
+    origin: 'http://localhost:3210',
+  });
+  if (lanStill === 'http://192.168.1.7:3210/?room=ABCD') ok('本地打开时仍然优先局域网 IP（手机扫得到）');
+  else fail(`本地打开时没有优先局域网 IP：${lanStill}`);
 }
 
 // ---------------------------------------------------------------- 服务端 network 信息
