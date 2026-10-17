@@ -126,17 +126,37 @@ fn describe_roots(app: &AppHandle) -> String {
 }
 
 fn port_open(p: u16) -> bool {
-    TcpStream::connect(("127.0.0.1", p)).is_ok()
+    // 一定要带超时：某些防火墙会把"不存在的端口"静默丢弃，默认 connect 会卡 2 秒以上，
+    // 扫 31 个端口就是 60 秒——这正是"启动很慢"的常见来源。
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], p));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(120)).is_ok()
 }
 
-/// 端口被占用时自动往后找：3210 → 3240
+/// 端口被占用时往后找：只看 3210~3216（每个最多 120ms），不再扫 31 个端口
 fn pick_port() -> u16 {
     if let Ok(v) = std::env::var("BOMB_PORT") {
         if let Ok(p) = v.parse::<u16>() {
             return p;
         }
     }
-    (3210..=3240).find(|p| !port_open(*p)).unwrap_or(3210)
+    (3210..=3216).find(|p| !port_open(*p)).unwrap_or(3210)
+}
+
+/// 已经有一份在跑吗？（只查前几个端口，避免慢）
+fn find_running() -> Option<u16> {
+    (3210..=3216).find(|p| port_open(*p))
+}
+
+/// 往日志里写一行（带时间戳，方便看各阶段耗时）
+fn log_line(app: &AppHandle, text: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path(app))
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "[rust] {text}");
+    }
 }
 
 fn log_path(app: &AppHandle) -> PathBuf {
@@ -261,12 +281,20 @@ fn setup_platform(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
                 .build();
 
             std::thread::spawn(move || {
+                let t0 = Instant::now();
+                log_line(&handle, "启动计时开始");
+
                 // 已经有一份在跑（比如之前没关干净）就直接用它
-                let existing = (3210..=3240).find(|p| port_open(*p));
+                let existing = find_running();
                 let port = match existing {
                     Some(p) => p,
                     None => pick_port(),
                 };
+                log_line(
+                    &handle,
+                    &format!("选定端口 {port}（{}）用了 {} ms", if existing.is_some() { "复用已有实例" } else { "新起服务" }, t0.elapsed().as_millis()),
+                );
+
                 if existing.is_none() {
                     match spawn_server(&handle, port) {
                         Ok(child) => {
@@ -277,11 +305,13 @@ fn setup_platform(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
                             return;
                         }
                     }
+                    log_line(&handle, &format!("node 已拉起，用了 {} ms", t0.elapsed().as_millis()));
                 }
 
+                // 30ms 一次：比原来的 150ms 少等最多 120ms
                 let started = Instant::now();
                 while started.elapsed() < Duration::from_secs(30) && !port_open(port) {
-                    sleep(Duration::from_millis(150));
+                    sleep(Duration::from_millis(30));
                 }
 
                 if !port_open(port) {
@@ -300,26 +330,31 @@ fn setup_platform(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
                     );
                     return;
                 }
+                log_line(&handle, &format!("端口就绪，总耗时 {} ms", t0.elapsed().as_millis()));
 
-                let url = match format!("http://127.0.0.1:{port}/").parse() {
-                    Ok(u) => u,
-                    Err(e) => {
-                        show_error(&handle, &format!("地址不合法：{e}"));
-                        return;
-                    }
-                };
-
+                let url = format!("http://127.0.0.1:{port}/");
                 let h = handle.clone();
                 let _ = handle.run_on_main_thread(move || {
-                    let built = WebviewWindowBuilder::new(&h, "main", WebviewUrl::External(url))
-                        .title("保持沟通就没人爆炸")
-                        .inner_size(1200.0, 860.0)
-                        .min_inner_size(900.0, 620.0)
-                        .center()
-                        .build();
-                    if built.is_ok() {
-                        if let Some(splash) = h.get_webview_window("splash") {
-                            let _ = splash.close();
+                    // 直接让"启动中"那个窗口自己跳过去：
+                    // 少建一个 WebView2 窗口，能省掉几百毫秒，也没有窗口闪一下的观感问题
+                    match h.get_webview_window("splash") {
+                        Some(win) => {
+                            let _ = win.set_title("保持沟通就没人爆炸");
+                            let _ = win.set_size(tauri::LogicalSize::new(1200.0, 860.0));
+                            let _ = win.center();
+                            if let Ok(json) = serde_json::to_string(&url) {
+                                if win.eval(&format!("location.replace({json});")).is_err() {
+                                    let _ = win.eval(&format!("window.location.href = {json};"));
+                                }
+                            }
+                        }
+                        None => {
+                            let _ = WebviewWindowBuilder::new(&h, "main", WebviewUrl::External(url.parse().unwrap()))
+                                .title("保持沟通就没人爆炸")
+                                .inner_size(1200.0, 860.0)
+                                .min_inner_size(900.0, 620.0)
+                                .center()
+                                .build();
                         }
                     }
                 });
