@@ -146,9 +146,24 @@ function toast(title, text) {
   );
 }
 
+function runDetached(cmd, args) {
+  try {
+    const r = cp.spawnSync(cmd, args, { stdio: 'ignore', windowsHide: true, timeout: 5000 });
+    return r.status === 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 打开浏览器：优先用 ShellExecute（Start-Process），它会在已经开着的浏览器里新开一个标签，
+// 而不是把浏览器重新拉起来。start 命令在部分机器上会重新启动浏览器，所以放在最后兜底。
 function openBrowser(url) {
   logLine('open browser: ' + url);
-  try { cp.exec('start "" "' + url + '"', { windowsHide: true }); } catch (e) { logLine('开浏览器失败: ' + e.message); }
+  if (runDetached('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', 'Start-Process ' + JSON.stringify(url)])) {
+    return;
+  }
+  if (runDetached('rundll32.exe', ['url.dll,FileProtocolHandler', url])) return;
+  runDetached('cmd.exe', ['/d', '/s', '/c', 'start "" "' + url + '"']);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

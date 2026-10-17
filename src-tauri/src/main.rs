@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 //! Tauri 桌面外壳：启动内置的 Node 服务，再用真正的窗口加载它。
 //!
 //! 设计要点（都是踩过的坑）：
@@ -217,11 +217,10 @@ fn show_error(app: &AppHandle, message: &str) {
     });
 }
 
-fn main() {
-    tauri::Builder::default()
-        .manage(ServerProcess(Mutex::new(None)))
-        .setup(|app| {
-            let handle = app.handle().clone();
+/// 桌面端：起内置 node，再把窗口指向它
+#[cfg(not(target_os = "android"))]
+fn setup_platform(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let handle = app.handle().clone();
 
             // 让用户"看得见"：先出一个启动中的窗口
             let _ = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("loading.html".into()))
@@ -295,8 +294,25 @@ fn main() {
                     }
                 });
             });
-            Ok(())
-        })
+    Ok(())
+}
+
+/// 手机端：安卓上跑不了 node.exe，所以这里只做一个"填房主地址"的壳，
+/// 填完直接跳过去（游戏本体还是房主电脑 / 云端在提供）。
+#[cfg(target_os = "android")]
+fn setup_platform(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("mobile.html".into()))
+        .title("BombGame")
+        .inner_size(420.0, 780.0)
+        .center()
+        .build();
+    Ok(())
+}
+
+fn main() {
+    tauri::Builder::default()
+        .manage(ServerProcess(Mutex::new(None)))
+        .setup(|app| setup_platform(app))
         .build(tauri::generate_context!())
         .expect("构建 Tauri 应用失败")
         .run(|app: &AppHandle, event: RunEvent| {

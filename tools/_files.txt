@@ -1,4 +1,5 @@
 .gitattributes
+.github/workflows/tauri-android.yml
 .github/workflows/tauri-windows.yml
 .gitignore
 Dockerfile
@@ -8,13 +9,17 @@ client/admin.js
 client/app.js
 client/bomb.js
 client/dom.js
+client/icon-192.png
+client/icon-512.png
 client/index.html
 client/invite.js
+client/manifest.webmanifest
 client/manual.js
 client/qr.js
 client/style.css
 client/tutorial.html
 docs/.nojekyll
+docs/icon-192.png
 docs/index.html
 lib/bomb.js
 lib/modules-extra.js
@@ -31,6 +36,7 @@ src-tauri/build.rs
 src-tauri/capabilities/default.json
 src-tauri/dist-ui/error.html
 src-tauri/dist-ui/loading.html
+src-tauri/dist-ui/mobile.html
 src-tauri/logo.png
 src-tauri/src/main.rs
 src-tauri/tauri.conf.json

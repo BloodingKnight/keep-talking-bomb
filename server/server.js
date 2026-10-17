@@ -97,6 +97,7 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 // 打成单文件 exe 时，client/ 的内容会被内联进同一个 JS（见 tools/build-single.mjs），

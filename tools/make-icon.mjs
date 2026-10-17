@@ -11,7 +11,6 @@ import zlib from 'node:zlib';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(ROOT, 'src-tauri', 'logo.png');
 const S = 512;
-
 const px = Buffer.alloc(S * S * 4);
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -88,12 +87,6 @@ fillCircle(392, 112, 14, [255, 226, 150]);
 thickLine(316, 168, 350, 202, 22, [58, 70, 88]);
 
 // ---------------- PNG 编码
-const raw = Buffer.alloc((S * 4 + 1) * S);
-for (let y = 0; y < S; y++) {
-  raw[y * (S * 4 + 1)] = 0; // filter: none
-  px.copy(raw, y * (S * 4 + 1) + 1, y * S * 4, (y + 1) * S * 4);
-}
-
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -118,22 +111,55 @@ function chunk(type, data) {
   return Buffer.concat([len, body, crc]);
 }
 
-const ihdr = Buffer.alloc(13);
-ihdr.writeUInt32BE(S, 0);
-ihdr.writeUInt32BE(S, 4);
-ihdr[8] = 8; // bit depth
-ihdr[9] = 6; // RGBA
-ihdr[10] = 0;
-ihdr[11] = 0;
-ihdr[12] = 0;
+function encodePng(width, height, rgba) {
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    raw[y * (width * 4 + 1)] = 0; // filter: none
+    rgba.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // RGBA
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
-const png = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  chunk('IHDR', ihdr),
-  chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-  chunk('IEND', Buffer.alloc(0)),
-]);
+/** 最近邻缩放（图标这种几何图形足够用，不引入任何依赖） */
+function resize(src, from, to) {
+  const out = Buffer.alloc(to * to * 4);
+  const ratio = from / to;
+  for (let y = 0; y < to; y++) {
+    for (let x = 0; x < to; x++) {
+      const sx = Math.min(from - 1, Math.floor((x + 0.5) * ratio));
+      const sy = Math.min(from - 1, Math.floor((y + 0.5) * ratio));
+      const s = (sy * from + sx) * 4;
+      const d = (y * to + x) * 4;
+      out[d] = src[s];
+      out[d + 1] = src[s + 1];
+      out[d + 2] = src[s + 2];
+      out[d + 3] = src[s + 3];
+    }
+  }
+  return out;
+}
 
-fs.mkdirSync(path.dirname(OUT), { recursive: true });
-fs.writeFileSync(OUT, png);
-console.log(`[icon] ${path.relative(ROOT, OUT)}  ${S}x${S}  ${(png.length / 1024).toFixed(0)} KB`);
+const targets = [
+  { file: OUT, size: S }, // Tauri 图标源图
+  { file: path.join(ROOT, 'client', 'icon-512.png'), size: 512 }, // PWA / 主屏幕图标
+  { file: path.join(ROOT, 'client', 'icon-192.png'), size: 192 },
+  { file: path.join(ROOT, 'docs', 'icon-192.png'), size: 192 }, // Pages 页面的小图标
+];
+
+for (const t of targets) {
+  const rgba = t.size === S ? px : resize(px, S, t.size);
+  const png = encodePng(t.size, t.size, rgba);
+  fs.mkdirSync(path.dirname(t.file), { recursive: true });
+  fs.writeFileSync(t.file, png);
+  console.log(`[icon] ${path.relative(ROOT, t.file)}  ${t.size}x${t.size}  ${(png.length / 1024).toFixed(0)} KB`);
+}

@@ -1,0 +1,80 @@
+name: tauri-android
+
+# 生成 Android APK：用 GitHub 的 Linux runner 编译，本机不需要 Rust/Android SDK。
+# 说明：手机上跑不了 node.exe，所以这个 APK 是"瘦客户端" ——
+#       打开后先填房主的地址（局域网 IP 或 tools/share.mjs 给出的公网链接），再进游戏。
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: 安装 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 NDK
+        run: |
+          sdkmanager "ndk;27.0.12077973" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: 安装 Tauri CLI
+        run: cargo install tauri-cli --version "^2.0" --locked
+
+      - name: 生成图标
+        working-directory: src-tauri
+        run: cargo tauri icon logo.png
+
+      - name: 初始化 Android 工程
+        working-directory: src-tauri
+        run: cargo tauri android init --ci
+
+      - name: 构建 APK（arm64，覆盖绝大多数手机）
+        working-directory: src-tauri
+        run: cargo tauri android build --apk --target aarch64
+
+      - name: 收集 APK
+        run: |
+          mkdir -p out
+          find src-tauri/gen/android -name "*.apk" -exec cp {} out/ \;
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BombGame-android
+          path: out/*.apk
+          if-no-files-found: error
+
+      - name: 打 tag 时挂到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+          fail_on_unmatched_files: false
