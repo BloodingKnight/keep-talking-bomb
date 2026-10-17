@@ -168,19 +168,34 @@ export class RoomDurableObject {
 
     const stream = new ReadableStream({
       start(controller) {
-        const push = (event, data) => {
+        const write = (text) => {
           if (closed) return;
           try {
-            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            controller.enqueue(encoder.encode(text));
           } catch {
             closed = true;
           }
         };
-        sub = { playerId, push, close: () => { closed = true; try { controller.close(); } catch {} } };
+        // 注意：客户端用 es.onmessage 收状态，所以状态必须是**无名事件**（只有 data:）。
+        // 发成 `event: state` 客户端会一条都收不到（这是踩过的坑）。
+        // 只有 closed 这种"专门的事件"才用 event: 且客户端用 addEventListener('closed')。
+        sub = {
+          playerId,
+          pushData: (obj) => write(`data: ${JSON.stringify(obj)}\n\n`),
+          pushEvent: (name, obj) => write(`event: ${name}\ndata: ${JSON.stringify(obj)}\n\n`),
+          close: () => {
+            closed = true;
+            try {
+              controller.close();
+            } catch {
+              /* 已经关了 */
+            }
+          },
+        };
         self.subs.add(sub);
         self.ensureTicker();
         // 先推一次当前状态，客户端不用等下一个 tick
-        push('state', playerState(room, player));
+        sub.pushData(playerState(room, player));
       },
       cancel() {
         closed = true;
@@ -228,7 +243,8 @@ export class RoomDurableObject {
   }
 
   push(sub, event, data) {
-    sub.push && sub.push(event, data);
+    if (event === 'closed') sub.pushEvent && sub.pushEvent('closed', data);
+    else sub.pushData && sub.pushData(data);
   }
 
   broadcast(room) {

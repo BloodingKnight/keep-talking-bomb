@@ -125,8 +125,12 @@ console.log('\n— DO：SSE —');
   const reader = res.body.getReader();
   const { value } = await reader.read();
   const first = new TextDecoder().decode(value || new Uint8Array());
-  if (first.includes('event: state') && first.includes('data: {')) ok('SSE 第一帧就是完整 state（客户端不用干等）');
-  else fail(`SSE 第一帧不对：${first.slice(0, 120)}`);
+  // 客户端用 es.onmessage 收状态 -> 必须是无名事件（只有 data:，不能带 event: state）
+  if (first.includes('data: {') && !first.includes('event: state')) {
+    ok('SSE 第一帧就是完整 state，且是"无名事件"（客户端 es.onmessage 才收得到）');
+  } else {
+    fail(`SSE 第一帧格式不对（客户端会收不到）：${first.slice(0, 120)}`);
+  }
 
   await reader.cancel();
   room.stopTickerIfIdle();

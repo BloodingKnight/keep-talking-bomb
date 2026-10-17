@@ -25,6 +25,8 @@ cloudflare/wrangler.toml
 docs/.nojekyll
 docs/icon-192.png
 docs/index.html
+functions/README.md
+functions/api/[[path]].js
 lib/bomb.js
 lib/modules-extra.js
 lib/modules-more.js
@@ -59,6 +61,7 @@ tests/cloudflare.mjs
 tests/cors.mjs
 tests/deafsee.mjs
 tests/e2e.mjs
+tests/pages-proxy.mjs
 tests/qr.mjs
 tests/rooms.mjs
 tests/run-e2e.mjs
