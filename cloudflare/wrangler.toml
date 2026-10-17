@@ -1,0 +1,33 @@
+# Cloudflare Workers + Durable Objects 部署（把游戏搬到云上，家里不用开机）
+#
+#   npm i -g wrangler            # 或者 npx wrangler
+#   wrangler login
+#   node tools/build-static-site.mjs        # 生成 ../site（静态客户端）
+#   cd cloudflare && wrangler deploy
+#
+# 说明：
+#  · 一个房间 = 一个 Durable Object（Game 类原样复用 server/room.js）
+#  · Durable Objects 需要 Workers 付费计划（$5/月起）；免费计划是否包含请以你控制台为准
+#  · 客户端用 ?server=https://<worker>.workers.dev 指向这里（静态页可放 Pages/EdgeOne）
+
+name = "bombgame"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 静态客户端（由 node tools/build-static-site.mjs 生成）
+[assets]
+directory = "../site"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomDurableObject"
+
+[[migrations]]
+tag = "v1"
+# 新命名空间必须用 SQLite 后端（Cloudflare 已不再接受 KV 后端的新建）
+new_sqlite_classes = ["RoomDurableObject"]
+
+[observability]
+enabled = true

@@ -18,6 +18,9 @@ client/manual.js
 client/qr.js
 client/style.css
 client/tutorial.html
+cloudflare/src/index.js
+cloudflare/src/room-do.js
+cloudflare/wrangler.toml
 docs/.nojekyll
 docs/icon-192.png
 docs/index.html
@@ -51,6 +54,7 @@ tests/bench.mjs
 tests/blind.mjs
 tests/bugs.mjs
 tests/client.mjs
+tests/cloudflare.mjs
 tests/cors.mjs
 tests/deafsee.mjs
 tests/e2e.mjs

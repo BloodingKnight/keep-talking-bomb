@@ -439,6 +439,34 @@ node tools/build-portable.mjs
 > 打包机的 Node 版本就是玩家用的版本（直接取 `process.execPath`）。
 > `dist/` 已在 `.gitignore` 里，90 MB 的 node.exe 不会进仓库。
 
+### Cloudflare Workers + Durable Objects（把游戏本体搬到云上）
+
+这是**唯一能让"服务端"也上云**的托管方案（EdgeOne/Pages 只能放静态客户端）：
+
+```
+cloudflare/src/index.js     Worker：路由 + CORS + 分配房间号 + 静态资源
+cloudflare/src/room-do.js   Durable Object：一个房间一个实例，内部就是 new Game()
+cloudflare/wrangler.toml    DO 绑定 / SQLite 存储 / [assets] 静态资源
+```
+
+为什么能这么省事：`lib/*` **零 Node 依赖**，`server/room.js` 只用了 `crypto.randomBytes`
+（Workers 开 `nodejs_compat` 就支持），所以**游戏逻辑一行不用改**，只重写传输层
+（`node:http` → `fetch` + `ReadableStream` 的 SSE）。客户端也完全不用改。
+
+```bash
+node tools/build-static-site.mjs        # 生成 site/（静态客户端）
+cd cloudflare && wrangler deploy        # 需要 wrangler login
+```
+
+客户端指向它：`https://你的静态页/?server=https://bombgame.xxx.workers.dev`
+
+> **注意**：Durable Objects 属于 Workers 付费计划（$5/月起，免费计划是否包含以控制台为准）；
+> DO 空闲会被驱逐，没人连着时房间状态会丢（本地版也是内存态）。
+> **国内可达性**：`*.workers.dev` / `*.pages.dev` 在国内经常不稳定，要稳定得绑自定义域名。
+>
+> 本地就能验证移植是否正确（不需要 Cloudflare 账号）：`node tests/cloudflare.mjs`
+> —— 它把 DO 直接实例化，跑建房/加入/开始/权限/SSE/404，全绿。
+
 ### 静态托管（EdgeOne Pages / GitHub Pages）：放客户端，API 打回房主
 
 先说清楚一个容易误会的地方：**localStorage 不能用来同步房间**。它是「每个设备、每个域名各自一份」，
