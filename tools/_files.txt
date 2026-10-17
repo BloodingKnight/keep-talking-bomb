@@ -64,6 +64,7 @@ tools/_gh-release.mjs
 tools/_push.mjs
 tools/_release110.mjs
 tools/_release111.mjs
+tools/_release113.mjs
 tools/build-portable.mjs
 tools/build-single.mjs
 tools/check-live.mjs
