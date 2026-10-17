@@ -1,0 +1,38 @@
+# Cloudflare Workers 部署配置（放在仓库根目录，这样 wrangler 默认就能找到它）
+#
+# 两种部署方式：
+#   A) Cloudflare 控制台连 GitHub（Workers Builds）
+#      构建命令: node tools/build-static-site.mjs
+#      部署命令: npx wrangler deploy
+#   B) GitHub Actions（.github/workflows/cloudflare.yml）
+#      在仓库 Secrets 里配 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID 即可
+#
+# 本地手动部署：
+#   node tools/build-static-site.mjs
+#   npx wrangler deploy
+#
+# 说明：
+#  · 一个房间 = 一个 Durable Object，内部复用 server/room.js 的 Game（逻辑零改动）
+#  · Durable Objects 需要 Workers 付费计划（$5/月起）；免费计划是否包含以控制台为准
+#  · 新命名空间必须用 SQLite 后端（Cloudflare 已不接受 KV 后端的新建）
+
+name = "bombgame"
+main = "cloudflare/src/index.js"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 静态客户端：先跑 node tools/build-static-site.mjs 生成 site/
+[assets]
+directory = "./site"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDurableObject"]
+
+[observability]
+enabled = true

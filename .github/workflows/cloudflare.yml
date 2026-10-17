@@ -1,0 +1,70 @@
+name: cloudflare-deploy
+
+# 把游戏部署到 Cloudflare Workers（一房间一个 Durable Object）。
+#
+# 需要你在仓库 Settings -> Secrets and variables -> Actions 里配两个：
+#   CLOUDFLARE_API_TOKEN   权限：Workers Scripts:Edit、Durable Objects:Edit、Account Settings:Read
+#   CLOUDFLARE_ACCOUNT_ID  控制台右下角的 Account ID
+# 没配的话这个 workflow 会**跳过部署并成功退出**，不会把 CI 打红。
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/**"
+      - "server/**"
+      - "lib/**"
+      - "client/**"
+      - "wrangler.toml"
+      - "tools/build-static-site.mjs"
+      - ".github/workflows/cloudflare.yml"
+
+concurrency:
+  group: cloudflare-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 本地先跑一遍移植测试（不需要云端凭据）
+        run: node tests/cloudflare.mjs
+
+      - name: 生成静态客户端
+        run: node tools/build-static-site.mjs
+
+      - name: 检查是否配置了 Cloudflare 凭据
+        id: creds
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "凭据已配置，开始部署"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::没有配置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，跳过部署（这不是失败）"
+          fi
+
+      - name: 部署到 Cloudflare Workers
+        if: steps.creds.outputs.enabled == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: 打印部署地址
+        if: steps.creds.outputs.enabled == 'true'
+        run: |
+          echo "部署完成。客户端地址可以用 ?server= 指向这个 Worker："
+          echo "  https://<你的子域>.workers.dev"
+          echo "详见仓库 README 的 Cloudflare 一节。"

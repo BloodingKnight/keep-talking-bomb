@@ -1,4 +1,5 @@
 .gitattributes
+.github/workflows/cloudflare.yml
 .github/workflows/tauri-android.yml
 .github/workflows/tauri-windows.yml
 .gitignore
@@ -86,3 +87,4 @@ tools/prepare-tauri-assets.mjs
 tools/probe-roles.mjs
 tools/share.mjs
 tools/verify-qr.mjs
+wrangler.toml
