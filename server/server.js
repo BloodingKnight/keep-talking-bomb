@@ -21,8 +21,15 @@ import { MODULES } from '../lib/modules.js';
 import { makeBomb } from '../lib/bomb.js';
 import { DIFFICULTIES, DIFFICULTY_ORDER, ROLE_INFO, EXTRA_EXPERT_ROLES, ROLES, PORTS, ROLE_PRESETS } from '../lib/vocab.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+// 单文件 exe 是被 esbuild 打成 CJS 的，那里没有 import.meta.url，所以退回 __dirname；
+// 两者都没有（极端情况）就用 cwd。打包版的 client/ 是内联进 JS 的（见 serveStatic），
+// 这里只要有一个稳定的字符串前缀就够了。
+const SELF_DIR = import.meta.url
+  ? path.dirname(fileURLToPath(import.meta.url))
+  : typeof __dirname === 'string'
+    ? __dirname
+    : process.cwd();
+const ROOT = path.resolve(SELF_DIR, '..');
 const CLIENT_DIR = path.join(ROOT, 'client');
 
 const game = new Game();
@@ -92,8 +99,23 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
 };
 
+// 打成单文件 exe 时，client/ 的内容会被内联进同一个 JS（见 tools/build-single.mjs），
+// 这样 exe 不需要往磁盘释放任何文件，行为也不会被当成"释放器"。
+const EMBEDDED_CLIENT = globalThis.__BOMB_EMBEDDED_CLIENT__ || null;
+
 function serveStatic(res, filePath) {
   const abs = path.resolve(filePath);
+  if (EMBEDDED_CLIENT) {
+    const rel = path.relative(CLIENT_DIR, abs).split(path.sep).join('/');
+    if (Object.prototype.hasOwnProperty.call(EMBEDDED_CLIENT, rel)) {
+      res.writeHead(200, {
+        'content-type': MIME[path.extname(abs)] || 'application/octet-stream',
+        'cache-control': 'no-cache',
+      });
+      res.end(EMBEDDED_CLIENT[rel]);
+      return;
+    }
+  }
   if (!abs.startsWith(CLIENT_DIR)) return send(res, 403, 'forbidden');
   fs.readFile(abs, (err, data) => {
     if (err) return send(res, 404, 'not found');

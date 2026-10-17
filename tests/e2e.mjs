@@ -272,13 +272,16 @@ async function main() {
   }
   const maxStrikes = s3.maxStrikes;
   let strikesMade = 0;
-  for (let attempt = 0; attempt < 30 && strikesMade < maxStrikes; attempt++) {
+  const exhausted = new Set(); // 已经"剪不出失误"的模块，别老盯着它
+  for (let attempt = 0; attempt < 60 && strikesMade < maxStrikes; attempt++) {
     s3 = await state(room2, mute.id);
     if (s3.room.phase !== 'playing') break;
-    const candidates = s3.bomb.moduleStates.filter((x) => x.status !== 'solved' && x.state);
-    const target = candidates.find((x) => ['keypad', 'memory', 'password', 'quiz', 'simon', 'morse'].includes(x.id)) || candidates[0];
+    const candidates = s3.bomb.moduleStates.filter((x) => x.status !== 'solved' && x.state && !exhausted.has(x.uid));
+    const target =
+      candidates.find((x) => ['keypad', 'memory', 'password', 'quiz', 'simon', 'morse'].includes(x.id)) || candidates[0];
     if (!target) {
-      // 整颗炸弹被"误打误撞"拆完了：重开一颗新的继续测失误上限
+      // 整颗炸弹被"误打误撞"拆完了（或者剩下的模块都剪不出失误）：重开一颗新的继续测失误上限
+      exhausted.clear();
       await h2.send({ type: 'restart' });
       await h2.send({ type: 'start' });
       continue;
@@ -289,6 +292,7 @@ async function main() {
       ok(`第 ${strikesMade}/${maxStrikes} 次失误（${target.title}）：${res.note}`);
     } else if (res.error) {
       // 这个模块这条路已经走不通了，下一轮换一个
+      exhausted.add(target.uid);
     } else {
       fail(`故意失误没有被记录（${target.title}: ${JSON.stringify(res)}）`);
       break;
@@ -484,7 +488,8 @@ async function makeStrike(client, uid) {
   switch (o.moduleId) {
     case 'wires': {
       const other = st.wires.find((w) => w.i !== S.target && !w.cut);
-      if (!other) return { strike: false, note: '这个线缆模块已经没有别的线可剪了' };
+      // 线剪完了就剪不出失误了：当成"这条路走不通"，让调用方换模块（别当成断言失败）
+      if (!other) return { error: '这个线缆模块已经没有别的线可剪了' };
       return act({ type: 'cut', index: other.i });
     }
     case 'button': {

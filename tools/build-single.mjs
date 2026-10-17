@@ -4,12 +4,15 @@
 //   -> dist/BombGame.exe                （约 91 MB，双击即玩，旁边不需要任何文件）
 //   -> dist/BombGame-win-x64-single.zip （只含那一个 exe）
 //
-// 原理：把 client/ lib/ server/ 作为 SEA 资源嵌进 node.exe，exe 启动时先把这些文件
-// 释放到 %LOCALAPPDATA%\BombGame\<构建号>\（第一次之后直接复用），再以真实 ESM 模块
-// 启动 server.js —— 所以运行时行为和仓库里完全一致，没有改写过的打包版本。
+// 设计要点（都是为了不被杀软当成"释放器"）：
+//   1. client/ 的静态文件直接内联进 JS（globalThis.__BOMB_EMBEDDED_CLIENT__），
+//      运行时不往磁盘写任何东西；
+//   2. server/ 与 lib/ 用 esbuild 打成一个 CJS bundle，再作为 SEA 的 main；
+//   3. 出错时不再"闪一下就消失"：打印堆栈、写 %LOCALAPPDATA%\BombGame\launch.log、
+//      并且是双击启动的话等按键再退出。
 //
-// 依赖（只在"打包机"上需要，玩家不需要）：
-//   cd .build && npm install --ignore-scripts postject
+// 打包机依赖（玩家不需要）：
+//   cd .build && npm install --ignore-scripts postject esbuild
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -20,127 +23,146 @@ const BUILD_DIR = path.join(ROOT, '.build');
 const DIST = path.join(ROOT, 'dist');
 const EXE = path.join(DIST, 'BombGame.exe');
 const POSTJECT = path.join(BUILD_DIR, 'node_modules', 'postject', 'dist', 'cli.js');
+const ESBUILD = path.join(BUILD_DIR, 'node_modules', '@esbuild', 'win32-x64', 'esbuild.exe');
 const FUSE = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 
-if (!fs.existsSync(POSTJECT)) {
-  console.error('[build] 缺少 postject，请先执行:');
-  console.error('        cd .build && npm install --ignore-scripts postject');
-  process.exit(1);
+for (const [what, file] of [
+  ['postject', POSTJECT],
+  ['esbuild', ESBUILD],
+]) {
+  if (!fs.existsSync(file)) {
+    console.error(`[build] 缺少 ${what}，请先执行:`);
+    console.error('        cd .build && npm install --ignore-scripts postject esbuild');
+    process.exit(1);
+  }
 }
 
-// ---------------------------------------------------------------- 收集要嵌入的文件
-const SRC_DIRS = ['client', 'lib', 'server'];
-const files = [];
-for (const dir of SRC_DIRS) {
-  const walk = (abs, rel) => {
-    for (const ent of fs.readdirSync(abs, { withFileTypes: true })) {
-      const r = rel ? rel + '/' + ent.name : ent.name;
-      if (ent.isDirectory()) walk(path.join(abs, ent.name), r);
-      else files.push({ key: dir + '/' + r, abs: path.join(abs, ent.name) });
+// ---------------------------------------------------------------- 内联 client/
+const clientDir = path.join(ROOT, 'client');
+const assets = {};
+let assetBytes = 0;
+const walk = (abs, rel) => {
+  for (const ent of fs.readdirSync(abs, { withFileTypes: true })) {
+    const r = rel ? rel + '/' + ent.name : ent.name;
+    if (ent.isDirectory()) {
+      walk(path.join(abs, ent.name), r);
+    } else {
+      const text = fs.readFileSync(path.join(abs, ent.name), 'utf8');
+      assets[r] = text;
+      assetBytes += Buffer.byteLength(text);
     }
-  };
-  walk(path.join(ROOT, dir), '');
-}
-const totalBytes = files.reduce((n, f) => n + fs.statSync(f.abs).size, 0);
-console.log(`[build] 要嵌入的文件: ${files.length} 个, ${(totalBytes / 1024).toFixed(0)} KB`);
+  }
+};
+walk(clientDir, '');
+console.log(`[build] 内联 client/: ${Object.keys(assets).length} 个文件, ${(assetBytes / 1024).toFixed(0)} KB`);
 
-// 构建号 = 内容指纹，改了代码就会释放到新目录，不会用到旧的残留
-const crypto = await import('node:crypto');
-const hash = crypto.createHash('sha256');
-for (const f of files) hash.update(f.key).update(fs.readFileSync(f.abs));
-const BUILD_ID = hash.digest('hex').slice(0, 12);
-console.log('[build] 构建号:', BUILD_ID);
+fs.writeFileSync(
+  path.join(BUILD_DIR, 'client-assets.cjs'),
+  '// 由 tools/build-single.mjs 生成：内联的 client/ 静态文件\nmodule.exports = ' +
+    JSON.stringify(assets) +
+    ';\n',
+  'utf8',
+);
 
-// ---------------------------------------------------------------- 生成入口脚本
-const entry = `'use strict';
-// 由 tools/build-single.mjs 生成：单文件入口，先解包再启动真正的 server.js
-const sea = require('node:sea');
+// ---------------------------------------------------------------- 入口（SEA main 的源）
+const mainSrc = `'use strict';
+// 由 tools/build-single.mjs 生成
+const cp = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const cp = require('node:child_process');
-const { pathToFileURL } = require('node:url');
 
-const BUILD_ID = ${JSON.stringify(BUILD_ID)};
-const FILES = ${JSON.stringify(files.map((f) => f.key))};
+globalThis.__BOMB_EMBEDDED_CLIENT__ = require('./client-assets.cjs');
 
-function dataDirs() {
-  const list = [];
-  const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-  list.push(path.join(local, 'BombGame', BUILD_ID));
-  try { list.push(path.join(os.tmpdir(), 'BombGame', BUILD_ID)); } catch (e) {}
-  list.push(path.join(path.dirname(process.execPath), '.bomb-data', BUILD_ID));
-  return list;
+function logPath() {
+  const base = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  return path.join(base, 'BombGame', 'launch.log');
 }
 
-function ensureFiles() {
-  let lastErr;
-  for (const dir of dataDirs()) {
+function writeLog(text) {
+  try {
+    const f = logPath();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.appendFileSync(f, '[' + new Date().toISOString() + '] ' + text + '\\n');
+  } catch (e) {}
+}
+
+function fatal(e) {
+  const text = (e && e.stack) || String(e);
+  console.error('');
+  console.error('[bomb] 启动失败，原因如下：');
+  console.error(text);
+  console.error('');
+  writeLog('FATAL ' + text);
+  console.error('这段信息也写到了: ' + logPath());
+  if (process.stdin.isTTY) {
+    console.error('按任意键退出…');
     try {
-      const stamp = path.join(dir, '.complete');
-      if (fs.existsSync(stamp)) return dir;
-      for (const rel of FILES) {
-        const dest = path.join(dir, rel.split('/').join(path.sep));
-        fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.writeFileSync(dest, Buffer.from(sea.getRawAsset(rel)));
-      }
-      fs.writeFileSync(stamp, 'ok');
-      return dir;
-    } catch (e) {
-      lastErr = e;
-    }
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.once('data', function () { process.exit(1); });
+      return;
+    } catch (x) {}
   }
-  throw lastErr;
+  process.exit(1);
 }
 
-// 双击启动时（没有参数、有控制台）顺手把浏览器打开，并把控制台切到 UTF-8 好显示中文
-const doubleClicked = !process.argv[2] && process.stdout.isTTY;
+process.on('uncaughtException', fatal);
+process.on('unhandledRejection', fatal);
+
+// 双击启动（没有参数 + 有控制台）：切 UTF-8、顺手开浏览器
+// BOMB_FORCE_DOUBLE=1 强制走这条分支，便于自动化验证
+const doubleClicked = process.env.BOMB_FORCE_DOUBLE === '1' || (!process.argv[2] && process.stdout.isTTY);
+writeLog('launch argv=' + JSON.stringify(process.argv) + ' tty=' + !!process.stdout.isTTY);
 if (doubleClicked) {
   try { cp.execSync('cmd /c chcp 65001', { stdio: 'ignore' }); } catch (e) {}
   setTimeout(function () {
     try { cp.exec('start "" "http://localhost:' + (process.env.PORT || 3210) + '/"'); } catch (e) {}
-  }, 700);
+  }, 900);
 }
 
-const dir = ensureFiles();
-const serverPath = path.join(dir, 'server', 'server.js');
-process.argv[1] = serverPath;
-
-(async function () {
-  try {
-    await import(pathToFileURL(serverPath).href);
-  } catch (e) {
-    if (e && (e.code === 'ERR_REQUIRE_ESM' || e.code === 'ERR_UNSUPPORTED_ESM_URL_SCHEME')) {
-      require(serverPath);
-      return;
-    }
-    throw e;
-  }
-})().catch(function (e) {
-  console.error('[bomb] 启动失败:', (e && e.stack) || e);
-  try { if (doubleClicked) process.stdin.resume(); } catch (x) {}
-});
+try {
+  require('../server/server.js');
+} catch (e) {
+  fatal(e);
+}
 `;
+fs.writeFileSync(path.join(BUILD_DIR, 'sea-main.cjs'), mainSrc, 'utf8');
 
-const entryPath = path.join(BUILD_DIR, 'sea-entry.cjs');
-fs.writeFileSync(entryPath, entry, 'utf8');
+// ---------------------------------------------------------------- esbuild 打成一个 bundle
+// 注意：bundle 本身就是 SEA 的 main（里面不能再 require 自己，否则 SEA 里会找不到模块）
+console.log('[build] esbuild 打包 server + lib ...');
+const bundleOut = path.join(BUILD_DIR, 'bomb-bundle.cjs');
+const bundle = spawnSync(
+  ESBUILD,
+  [
+    path.join(BUILD_DIR, 'sea-main.cjs'),
+    '--bundle',
+    '--platform=node',
+    '--format=cjs',
+    '--target=node20',
+    '--log-level=warning',
+    '--outfile=' + bundleOut,
+  ],
+  { cwd: ROOT, stdio: 'inherit' },
+);
+if (bundle.status !== 0) {
+  console.error('[build] esbuild 失败');
+  process.exit(1);
+}
+console.log(`[build] bundle: ${(fs.statSync(bundleOut).size / 1024).toFixed(0)} KB`);
 
-// ---------------------------------------------------------------- SEA 配置
+// ---------------------------------------------------------------- SEA blob
 const config = {
-  main: entryPath,
+  main: bundleOut,
   output: path.join(BUILD_DIR, 'sea-prep.blob'),
   disableExperimentalSEAWarning: true,
   useSnapshot: false,
-  assets: Object.fromEntries(files.map((f) => [f.key, f.abs])),
 };
 const configPath = path.join(BUILD_DIR, 'sea-config.json');
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 
-// ---------------------------------------------------------------- 生成 blob
-const gen = spawnSync(process.execPath, ['--experimental-sea-config', configPath], {
-  cwd: ROOT,
-  stdio: 'inherit',
-});
+const gen = spawnSync(process.execPath, ['--experimental-sea-config', configPath], { cwd: ROOT, stdio: 'inherit' });
 if (gen.status !== 0) {
   console.error('[build] 生成 SEA blob 失败');
   process.exit(1);
@@ -148,16 +170,13 @@ if (gen.status !== 0) {
 const blob = path.join(BUILD_DIR, 'sea-prep.blob');
 console.log(`[build] blob: ${(fs.statSync(blob).size / 1024).toFixed(0)} KB`);
 
-// ---------------------------------------------------------------- 复制 node.exe 并注入
+// ---------------------------------------------------------------- 注入
 fs.mkdirSync(DIST, { recursive: true });
 fs.copyFileSync(process.execPath, EXE);
-console.log(`[build] 已复制 node.exe (${(fs.statSync(EXE).size / 1024 / 1024).toFixed(1)} MB)`);
-
-const inject = spawnSync(
-  process.execPath,
-  [POSTJECT, EXE, 'NODE_SEA_BLOB', blob, '--sentinel-fuse', FUSE],
-  { cwd: ROOT, stdio: 'inherit' },
-);
+const inject = spawnSync(process.execPath, [POSTJECT, EXE, 'NODE_SEA_BLOB', blob, '--sentinel-fuse', FUSE], {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
 if (inject.status !== 0) {
   console.error('[build] postject 注入失败');
   process.exit(1);
