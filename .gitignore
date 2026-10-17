@@ -2,6 +2,9 @@
 node_modules/
 package-lock.json
 
+# 打包产物（绿色版里有 90MB 的 node.exe，绝对不要进仓库）
+dist/
+
 # 运行期日志
 *.log
 server.log

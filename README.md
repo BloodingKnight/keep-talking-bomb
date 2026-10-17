@@ -333,6 +333,68 @@ node tests/run-e2e.mjs
 
 ---
 
+## 分发：发给别人玩（不用装 Node）
+
+### 方式一：Windows 绿色版（推荐，面对面玩）
+
+一条命令打包，产物是**自带 Node 运行时**的压缩包，对方解压双击 `play.cmd` 就能玩：
+
+```bash
+node tools/build-portable.mjs
+# -> dist/BombGame-win-x64/       （目录，约 91 MB）
+# -> dist/BombGame-win-x64.zip    （压缩包，约 35 MB，47 个文件）
+```
+
+包里有：`node\node.exe`（Node 运行时）+ `play.cmd`（启动器，会把自带的 node 塞进 PATH，再调用
+`start.ps1`，所以端口、后台模式、自动开浏览器这些功能全都在）+ `使用说明.txt`。
+
+玩家只要：**解压 → 双击 `play.cmd` → 浏览器自动打开 → 把窗口里打印的局域网地址和房间号发给朋友**。
+不需要装 Node、不需要 `npm install`（本项目零依赖）、不需要联网下载任何东西。
+
+几个实际会遇到的情况都写进 `使用说明.txt` 了：SmartScreen 提示、防火墙放行、端口被占用
+（`play.cmd 8080`）、异地怎么玩。
+
+> 打包机的 Node 版本就是玩家用的版本（直接取 `process.execPath`）。
+> `dist/` 已在 `.gitignore` 里，90 MB 的 node.exe 不会进仓库。
+
+### 方式二：公网在线版（发个链接就能玩，异地也行）
+
+服务端读 `PORT` 环境变量、支持 `BOMB_ADMIN_TOKEN`，所以任何能跑容器的平台都能直接部署：
+
+```bash
+docker build -t bombsite .
+docker run -d --name bombsite -p 3210:3210 -e BOMB_ADMIN_TOKEN=换成你的令牌 bombsite
+```
+
+放到 Render / Railway / Fly / Zeabur / 自己的 VPS 都可以，平台一般会帮你配好 HTTPS。
+注意两点：**只能跑 1 个实例**（房间状态在内存里，多副本之间不共享房间）；建议用
+`BOMB_ADMIN_TOKEN` 固定管理令牌，否则每次重启都会变。
+
+### 方式三：微信小程序 —— 目前做不了，原因是硬门槛
+
+不是技术实现不了，是平台规则卡死，具体三条：
+
+1. **类目与版号**：个人主体的小程序**选不了「游戏」类目**；游戏类目需要企业主体 + 广电总局的
+   网络游戏出版物号（版号）。所以"小游戏"这条路个人开发者走不通。
+2. **域名必须备案**：小程序的 `wx.request` / `wx.connectSocket` 只能请求**已 ICP 备案的
+   HTTPS/WSS 域名**，而且要在后台配进白名单。**局域网 IP 一律不允许** —— 这正好掐死了本游戏
+   最核心的"同一张桌子、各看各的屏幕"玩法。
+3. **没有 SSE**：小程序的网络层没有 `EventSource`，现在的实时推送（`GET /api/events`）得改成
+   WebSocket 重写传输层。
+
+所以想在微信里分享给朋友，实际可行的做法是**方式二的公网版**：把服务部署到有备案域名的机器上，
+把链接发到微信里，对方点开就是浏览器 H5，扫码/点链接即玩。真要做小程序，需要企业主体 + 版号 +
+备案域名 + WebSocket 改造，不是加个壳的事。
+
+### 想要"单个 exe 文件"？
+
+技术上可以（Node 25 的 SEA + `postject` 注入），但有两个前提：打包机要能 `npm install postject`，
+而且要把 `client/` 里的静态文件通过 `sea.getAsset()` 嵌进运行时（现在 `serveStatic` 是直接读磁盘的，
+需要改成"先查内嵌资源、再退回磁盘"）。README 里的绿色版已经达到了"玩家不用装 Node"的目的，
+单文件 exe 只是省一次解压，收益不大，暂未做。
+
+---
+
 ## 目录结构
 
 ```
@@ -340,6 +402,8 @@ start.cmd            Windows 启动器（双击即可；转发给 start.ps1）
 start.ps1            Windows 启动脚本：端口 / 令牌 / 测试模式 / 后台模式 / 自动开浏览器
 stop.ps1             停掉后台模式起的服务（只结束 node 进程）
 start.sh             macOS / Linux 启动脚本
+Dockerfile           公网部署用的镜像（只带运行需要的文件）
+tools/build-portable.mjs  打 Windows 绿色版 + 手写 zip（无第三方依赖）
 server/server.js     HTTP + SSE 服务、路由、广播、测试后门
 server/room.js       会话/房间管理：加入、座位、角色、阶段、失误、结算
 lib/bomb.js          炸弹生成（外壳信息 + 模块选取 + 难度权重）与计分
