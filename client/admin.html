@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>拆弹游戏 · 管理入口</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="admin-body">
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">🛠️</span>
+      <div>
+        <div class="brand-title">拆弹游戏 · 管理入口</div>
+        <div class="brand-sub">在线验题 · 会话监控 · 服务器状态</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span id="admin-badge" class="badge hidden"></span>
+      <a class="badge" href="/" target="_blank" rel="noopener">玩家页面 ↗</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================ TOKEN ============================ -->
+    <section id="stage-token" class="stage hidden">
+      <div class="panel join-panel">
+        <h1>需要管理令牌</h1>
+        <p class="muted">令牌在服务器启动时打印在终端里，也可以在启动时用 <code>--admin-token=xxx</code> 或环境变量 <code>BOMB_ADMIN_TOKEN</code> 指定。</p>
+        <label>管理令牌<input id="token-input" placeholder="粘贴令牌…" autocomplete="off" /></label>
+        <div class="row">
+          <button id="btn-token" class="primary">进入</button>
+        </div>
+        <div id="token-error" class="error"></div>
+      </div>
+    </section>
+
+    <!-- ============================ PANEL ============================ -->
+    <section id="stage-admin" class="stage hidden">
+      <nav class="tabs">
+        <button class="tab active" data-tab="question">🧪 出题与视角</button>
+        <button class="tab" data-tab="rooms">🚪 房间监控</button>
+        <button class="tab" data-tab="server">📊 服务器状态</button>
+      </nav>
+
+      <!-- ---------- 出题与视角（验题 + 角色视角合并） ---------- -->
+      <div id="tab-question" class="tab-panel">
+        <div class="panel">
+          <div class="row wrap" style="margin-top:0">
+            <label class="muted small" style="margin:0">题目来源
+              <select id="q-source" style="width:auto;margin:0 0 0 6px">
+                <option value="module" selected>单个模块</option>
+                <option value="bomb">整颗炸弹</option>
+              </select>
+            </label>
+            <label class="muted small" style="margin:0" id="q-module-label">模块
+              <select id="bench-module" style="width:auto;margin:0 0 0 6px"></select>
+            </label>
+            <label class="muted small" style="margin:0">等级
+              <select id="bench-tier" style="width:auto;margin:0 0 0 6px">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <label class="muted small" style="margin:0;display:none" id="q-diff-label">难度
+              <select id="role-difficulty" style="width:auto;margin:0 0 0 6px">
+                <option value="easy">简单</option>
+                <option value="normal" selected>普通</option>
+                <option value="hard">困难</option>
+                <option value="expert">专家</option>
+                <option value="nightmare">噩梦</option>
+              </select>
+            </label>
+            <label class="muted small" style="margin:0;display:none" id="q-count-label">模块数
+              <select id="role-count" style="width:auto;margin:0 0 0 6px">
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+            </label>
+            <button id="btn-generate" class="primary">换一道题</button>
+            <button id="btn-check-all">一键全量自检</button>
+            <span id="bench-status" class="muted small"></span>
+          </div>
+
+          <div class="muted small" style="margin-top:8px">
+            <b>视角</b>（默认是「🧰 操作者 + 📖 专家」两个）：可以再加上其他角色，看看同一道题他们各自能看到什么。
+          </div>
+          <div id="view-picker" class="role-picker"></div>
+          <div id="check-report" class="check-report hidden"></div>
+        </div>
+        <div id="bench-body" style="margin-top:14px"></div>
+      </div>
+
+      <!-- ---------- 房间监控 ---------- -->
+      <div id="tab-rooms" class="tab-panel hidden">
+        <div class="panel">
+          <div class="row" style="margin-top:0">
+            <button id="btn-refresh-rooms">刷新</button>
+            <label class="muted small" style="margin:0"><input type="checkbox" id="auto-refresh" checked style="width:auto;margin:0 6px 0 0" />自动刷新（2s）</label>
+          </div>
+          <div id="rooms-list" class="rooms-admin"></div>
+        </div>
+      </div>
+
+      <!-- ---------- 服务器状态 ---------- -->
+      <div id="tab-server" class="tab-panel hidden">
+        <div class="panel">
+          <h2>服务器</h2>
+          <div id="server-info" class="casing"></div>
+          <h3>难度档位</h3>
+          <table class="mtable" id="diff-table"></table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="/static/admin.js"></script>
+</body>
+</html>

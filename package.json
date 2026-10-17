@@ -1,0 +1,18 @@
+{
+  "name": "keep-talking-bomb",
+  "version": "1.0.0",
+  "private": true,
+  "description": "本地多人合作拆弹游戏：一人看炸弹、其他人查手册，面向同一局域网/同一台电脑的多人分屏信息合作",
+  "type": "module",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js 3210",
+    "test": "node tests/selftest.mjs 40",
+    "test:e2e": "node tests/run-e2e.mjs",
+    "manual:text": "node tools/extract-pdf.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "keywords": ["coop", "bomb", "party-game", "local-multiplayer", "sse"],
+  "license": "MIT"
+}

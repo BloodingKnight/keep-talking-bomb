@@ -1,0 +1,23 @@
+# 依赖（本项目零依赖，一般不会出现）
+node_modules/
+package-lock.json
+
+# 运行期日志
+*.log
+server.log
+server.err.log
+
+# 从附件 PDF 抽取出来的手册文本：只用于开发时核对玩法结构，
+# 里面是第三方版权内容，不要发布到公开仓库。
+tools/manual-text.txt
+tools/manual-text.clean.txt
+tools/manual-text*.*
+
+# 附件/截图等本地文件
+*.pdf
+*.zip
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini

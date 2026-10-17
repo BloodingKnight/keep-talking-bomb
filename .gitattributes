@@ -1,0 +1,11 @@
+# 统一换行，避免 Windows 克隆后脚本坏掉
+* text=auto
+
+# 批处理必须是 CRLF，否则 cmd.exe 解析会崩
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# shell / JS 保持 LF
+*.sh text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf

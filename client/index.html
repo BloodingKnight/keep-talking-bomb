@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>保持沟通就没人爆炸 · 本地合作拆弹</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">💣</span>
+      <div>
+        <div class="brand-title">保持沟通就没人爆炸</div>
+        <div class="brand-sub">本地多人·分屏信息·合作拆弹</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span id="room-badge" class="badge hidden"></span>
+      <span id="role-badge" class="badge hidden"></span>
+      <span id="link-badge" class="badge warn hidden">连接断开，正在重连…</span>
+      <a class="badge" href="/tutorial" target="_blank" rel="noopener" style="text-decoration:none">📖 教程</a>
+      <button id="btn-leave-top" class="ghost small hidden">退出房间</button>
+      <button id="btn-close-top" class="ghost small hidden">关闭房间</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================ JOIN ============================ -->
+    <section id="stage-join" class="stage">
+      <div class="panel join-panel">
+        <h1>加入一场拆弹</h1>
+        <p class="muted">
+          每个人用自己的一台设备（手机 / 平板 / 电脑）打开本页面。拆弹者只能看到炸弹，
+          专家只能看到手册，所有沟通靠你们自己当面进行。
+        </p>
+        <label>你的昵称<input id="join-name" maxlength="16" placeholder="例如：阿伟" /></label>
+        <label>房间号（留空则新建房间）<input id="join-room" maxlength="6" placeholder="例如：7K2M" style="text-transform:uppercase" /></label>
+        <div class="row">
+          <button id="btn-join" class="primary">加入 / 新建</button>
+          <a class="badge" href="/tutorial" target="_blank" rel="noopener" style="text-decoration:none">📖 新手教程</a>
+        </div>
+        <div id="join-error" class="error"></div>
+        <details class="hint">
+          <summary>怎么玩？</summary>
+          <ol>
+            <li>一人当<strong>拆弹者</strong>：负责看炸弹、动手操作（只能看炸弹，没有手册）。</li>
+            <li>其他人当<strong>专家</strong>：只有手册和炸弹外壳信息（序列号、电池、指示灯、端口）。</li>
+            <li>需要 3 人以上的时候，可以再选「盲眼观察员（只有半本手册）」「静默操作员（能操作但不能说话）」。</li>
+            <li>拆弹者把看到的东西念出来，专家查表告诉他按什么、剪哪根。</li>
+            <li>失误过多或者倒计时归零，炸弹爆炸。</li>
+          </ol>
+        </details>
+        <div id="room-list-wrap">
+          <h3>当前房间</h3>
+          <div id="room-list" class="room-list muted">加载中…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ LOBBY =========================== -->
+    <section id="stage-lobby" class="stage hidden">
+      <div class="lobby-grid">
+        <div class="panel">
+          <h2>玩家 <span id="lobby-count" class="muted"></span></h2>
+          <div id="lobby-players" class="players"></div>
+          <div class="row wrap">
+            <button id="btn-autoassign">自动分配角色</button>
+            <button id="btn-copy-link">复制邀请链接</button>
+            <button id="btn-kick" class="ghost hidden">移除选中玩家</button>
+            <button id="btn-leave" class="ghost">退出房间</button>
+            <button id="btn-close-room" class="ghost hidden">关闭房间</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>挑选角色</h2>
+          <p class="muted">点一下角色卡即可切换。至少要有一个拆弹者和一个专家。</p>
+          <div class="row wrap" id="role-presets" style="margin-bottom:10px"></div>
+          <div id="role-cards" class="role-cards"></div>
+        </div>
+        <div class="panel">
+          <h2>关卡设置 <span class="muted">（房主）</span></h2>
+          <label>难度<select id="set-difficulty"></select></label>
+          <div id="diff-desc" class="muted small"></div>
+          <label>模块数量（留空 = 按难度自动）<input id="set-modules" type="number" min="1" max="10" placeholder="自动" /></label>
+          <label>手册分配
+            <select id="set-manual">
+              <option value="">跟随难度</option>
+              <option value="full">完整手册（每人一本）</option>
+              <option value="partial">拆分手册（专家各拿一半）</option>
+            </select>
+          </label>
+          <div class="row">
+            <button id="btn-start" class="primary big">开始拆弹</button>
+            <button id="btn-bench" class="ghost">模块测试台</button>
+            <a class="badge" href="/tutorial" target="_blank" rel="noopener" style="text-decoration:none">📖 教程</a>
+          </div>
+          <div id="lobby-error" class="error"></div>
+          <div id="lobby-modules" class="muted small"></div>
+        </div>
+        <div class="panel chat-panel">
+          <h2>文字频道</h2>
+          <p class="muted small">给不能说话的玩家（静默操作员）用的，也可以用来传文字情报。</p>
+          <div id="lobby-chat" class="chat"></div>
+          <form id="lobby-chat-form" class="chat-form">
+            <input id="lobby-chat-input" maxlength="400" placeholder="输入消息…" autocomplete="off" />
+            <button class="primary">发送</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ GAME ============================ -->
+    <section id="stage-game" class="stage hidden">
+      <div class="game-grid">
+        <aside class="panel side">
+          <div id="hud"></div>
+          <div id="signal-panel"></div>
+          <div id="status-feed" class="feed"></div>
+          <div class="row">
+            <button id="btn-help" class="ghost small">我的角色</button>
+            <a class="badge" href="/tutorial" target="_blank" rel="noopener" style="text-decoration:none">📖 教程</a>
+          </div>
+        </aside>
+
+        <div id="main-area"></div>
+
+        <aside class="panel chat-panel side">
+          <h2>文字频道</h2>
+          <div id="game-chat" class="chat"></div>
+          <form id="game-chat-form" class="chat-form">
+            <input id="game-chat-input" maxlength="400" placeholder="输入消息…" autocomplete="off" />
+            <button class="primary">发送</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============================ BENCH (host) ============================ -->
+    <section id="stage-bench" class="stage hidden">
+      <div class="panel">
+        <div id="bench-head"></div>
+      </div>
+      <div id="bench-body" style="margin-top:14px"></div>
+    </section>
+
+    <!-- ============================ END ============================ -->
+    <section id="stage-end" class="stage hidden">
+      <div class="panel end-panel">
+        <h1 id="end-title"></h1>
+        <div id="end-body"></div>
+        <div class="row">
+          <button id="btn-again" class="primary big">再来一局</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
