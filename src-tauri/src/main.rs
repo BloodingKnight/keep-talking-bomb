@@ -21,25 +21,29 @@ struct ServerProcess(Mutex<Option<Child>>);
 /// 资源候选根目录（安装后 / 开发时 / MSI 与 NSIS 的布局差异）
 fn candidate_roots(app: &AppHandle) -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
-    let mut push = |p: PathBuf| {
-        if !roots.contains(&p) {
-            roots.push(p);
-        }
-    };
     if let Ok(res) = app.path().resource_dir() {
-        push(res.join("resources"));
-        push(res.clone());
+        for p in [res.join("resources"), res] {
+            if !roots.contains(&p) {
+                roots.push(p);
+            }
+        }
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            push(dir.join("resources"));
-            push(dir.to_path_buf());
+            for p in [dir.join("resources"), dir.to_path_buf()] {
+                if !roots.contains(&p) {
+                    roots.push(p);
+                }
+            }
         }
     }
-    // 开发模式：cargo tauri dev 的当前目录
+    // 开发模式：cargo tauri dev 时资源在 src-tauri/bundle-assets
     if let Ok(cwd) = std::env::current_dir() {
-        push(cwd.join("bundle-assets"));
-        push(cwd.join("src-tauri").join("bundle-assets"));
+        for p in [cwd.join("bundle-assets"), cwd.join("src-tauri").join("bundle-assets")] {
+            if !roots.contains(&p) {
+                roots.push(p);
+            }
+        }
     }
     roots
 }
@@ -62,6 +66,30 @@ fn find_asset(app: &AppHandle, rel: &str) -> Option<PathBuf> {
 }
 
 /// 把候选目录里都有什么列出来（限深度 2，避免刷屏），用于错误提示
+fn list_dir_into(out: &mut String, dir: &Path, depth: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            if e.path().is_dir() {
+                format!("{name}/")
+            } else {
+                name
+            }
+        })
+        .collect();
+    names.sort();
+    for name in names.into_iter().take(30) {
+        out.push_str("    ");
+        out.push_str(&"  ".repeat(depth));
+        out.push_str(&name);
+        out.push('\n');
+    }
+}
+
 fn describe_roots(app: &AppHandle) -> String {
     let mut out = String::new();
     for root in candidate_roots(app) {
@@ -71,32 +99,13 @@ fn describe_roots(app: &AppHandle) -> String {
             continue;
         }
         out.push('\n');
-        let mut list_dir = |dir: &Path, depth: usize| {
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                let mut names: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| {
-                        let name = e.file_name().to_string_lossy().to_string();
-                        if e.path().is_dir() {
-                            format!("{name}/")
-                        } else {
-                            name
-                        }
-                    })
-                    .collect();
-                names.sort();
-                for name in names.into_iter().take(30) {
-                    out.push_str(&format!("    {}{}\n", "  ".repeat(depth), name));
-                }
-            }
-        };
-        list_dir(&root, 0);
+        list_dir_into(&mut out, &root, 0);
         // 再看一层（bundle-assets/ 之类）
         for sub in ["bundle-assets", "resources"] {
             let p = root.join(sub);
             if p.is_dir() {
-                out.push_str(&format!("    {}/\n", sub));
-                list_dir(&p, 1);
+                out.push_str(&format!("    {sub}/\n"));
+                list_dir_into(&mut out, &p, 1);
             }
         }
     }
