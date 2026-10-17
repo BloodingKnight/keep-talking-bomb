@@ -14,6 +14,8 @@ client/manual.js
 client/qr.js
 client/style.css
 client/tutorial.html
+docs/.nojekyll
+docs/index.html
 lib/bomb.js
 lib/modules-extra.js
 lib/modules-more.js
@@ -55,6 +57,7 @@ tools/_files.txt
 tools/_gh-release.mjs
 tools/_push.mjs
 tools/_release110.mjs
+tools/_release111.mjs
 tools/build-portable.mjs
 tools/build-single.mjs
 tools/check-live.mjs

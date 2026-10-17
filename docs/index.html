@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>保持沟通就没人爆炸 — 本地多人合作拆弹</title>
+    <meta
+      name="description"
+      content="一个人看炸弹、其他人查手册，全程靠你们自己沟通的合作拆弹游戏。18 个模块、5 档难度、三种感官各缺一个的三人经典配置。"
+    />
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --panel: #111823;
+        --line: #263141;
+        --text: #dce6f2;
+        --muted: #8fa3bb;
+        --accent: #ffb347;
+        --ok: #5ad18a;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 600px at 50% -10%, #16202c 0%, var(--bg) 60%);
+        color: var(--text);
+        font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+        line-height: 1.6;
+      }
+      .wrap { max-width: 940px; margin: 0 auto; padding: 48px 20px 80px; }
+      header { text-align: center; margin-bottom: 36px; }
+      .bomb { font-size: 56px; line-height: 1; animation: beat 1.6s ease-in-out infinite; }
+      @keyframes beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+      h1 { font-size: 30px; margin: 14px 0 8px; letter-spacing: 0.5px; }
+      .tagline { color: var(--muted); font-size: 15px; margin: 0 auto; max-width: 640px; }
+      .badges { margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+      .badge {
+        font-size: 12px; color: var(--muted); border: 1px solid var(--line);
+        padding: 4px 10px; border-radius: 999px; background: #0d131b;
+      }
+      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 26px 0 8px; }
+      .btn {
+        display: inline-block; text-decoration: none; padding: 12px 22px; border-radius: 10px;
+        font-weight: 700; font-size: 15px; border: 1px solid var(--line); color: var(--text);
+        background: #131c28; transition: transform 0.12s ease, border-color 0.12s ease;
+      }
+      .btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+      .btn.primary { background: linear-gradient(180deg, #ffc266, #f0a33a); color: #241a05; border-color: #f0a33a; }
+      .hint { text-align: center; color: var(--muted); font-size: 12.5px; }
+      section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 22px; margin-top: 20px; }
+      h2 { font-size: 18px; margin: 0 0 12px; }
+      h2 .n {
+        display: inline-flex; width: 22px; height: 22px; border-radius: 50%; margin-right: 8px;
+        align-items: center; justify-content: center; font-size: 12px;
+        background: var(--accent); color: #241a05; vertical-align: 1px;
+      }
+      ol, ul { margin: 0; padding-left: 20px; }
+      li { margin-bottom: 6px; }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+        background: #0d131b; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+      th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+      th { color: var(--muted); font-weight: 600; }
+      .roles td:first-child { white-space: nowrap; }
+      .muted { color: var(--muted); }
+      .small { font-size: 12.5px; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+      .note {
+        border-left: 3px solid var(--accent); background: #0f1620;
+        padding: 10px 14px; border-radius: 8px; margin-top: 12px; font-size: 13.5px;
+      }
+      footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+      footer a { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="bomb">💣</div>
+        <h1>保持沟通就没人爆炸</h1>
+        <p class="tagline">
+          一个人看炸弹，其他人查手册，全程靠你们自己把话说明白。<br />
+          不提供语音和视频 —— 说话是你们自己的事。
+        </p>
+        <div class="badges">
+          <span class="badge">18 个模块</span>
+          <span class="badge">5 档难度</span>
+          <span class="badge">9 个座位</span>
+          <span class="badge">零第三方依赖</span>
+          <span class="badge">局域网点开就玩</span>
+        </div>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/BloodingKnight/keep-talking-bomb/releases/latest">下载（Windows）</a>
+          <a class="btn" href="https://github.com/BloodingKnight/keep-talking-bomb">源码 / 玩法说明</a>
+        </div>
+        <p class="hint">Windows 直接下安装包；macOS / Linux 用 <code>./start.sh</code>（需要 Node 18+）</p>
+      </header>
+
+      <section>
+        <h2><span class="n">1</span>三分钟开一局</h2>
+        <div class="grid2">
+          <div>
+            <ol>
+              <li>房主在自己电脑上打开游戏（安装包 / 绿色版 / <code>node server/server.js</code>）</li>
+              <li>大厅里会出现一个<strong>邀请二维码</strong>和局域网地址</li>
+              <li>朋友用手机扫描 / 打开地址 → 选角色 → 房主点「开始拆弹」</li>
+            </ol>
+          </div>
+          <div>
+            <p class="small muted" style="margin: 0 0 6px">不在同一个 Wi-Fi？</p>
+            <ol>
+              <li>在房主电脑上运行 <code>node tools/share.mjs</code></li>
+              <li>它会打印一个公网 <code>https://…</code> 地址</li>
+              <li>把这个地址发给朋友，**二维码会自动变成公网地址**</li>
+            </ol>
+          </div>
+        </div>
+        <div class="note">
+          这个游戏<strong>需要一个正在运行的服务端</strong>（房间、倒计时、判定都在服务端，答案永远不下发到玩家浏览器）。
+          所以它没法直接放在纯静态托管上玩 —— 静态托管只能放这个介绍页。
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="n">2</span>为什么好玩：每个人的屏幕都不一样</h2>
+        <table class="roles">
+          <thead>
+            <tr><th>角色</th><th>看得到</th><th>看不到</th><th>能做</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>拆弹者</td><td>炸弹题面 + 倒计时</td><td>全部手册</td><td>动手操作</td></tr>
+            <tr><td>专家</td><td>手册 + 外壳信息</td><td>炸弹题面</td><td>查表、念指令</td></tr>
+            <tr><td>🙈 盲操猴</td><td>只有按钮的白色轮廓</td><td>颜色、数字、文字、倒计时</td><td>操作炸弹</td></tr>
+            <tr><td>🙉 聋桥猴</td><td>整颗炸弹 + 队友鼠标位置</td><td>听不见（请自觉）</td><td>转述、发信号</td></tr>
+            <tr><td>🙊 哑手册猴</td><td>完整手册</td><td>炸弹</td><td>查表、发信号（不能说话）</td></tr>
+          </tbody>
+        </table>
+        <p class="small muted" style="margin-top: 10px">
+          三人推荐「三人经典」：盲操猴 + 聋桥猴 + 哑手册猴 —— 三种感官各缺一个，必须互相转述。
+        </p>
+      </section>
+
+      <section>
+        <h2><span class="n">3</span>常见问题</h2>
+        <p><strong>提示「node 被拦截 / 端口被占」？</strong><br />
+          <span class="small muted">换 3211 之后的端口会自动尝试；杀软如果拦了内置的 node.exe，把它加入白名单，或者改用绿色版（里面是 Node 官方原版 node.exe，签名完好）。</span></p>
+        <p><strong>能不能做成微信小程序？</strong><br />
+          <span class="small muted">目前不行：个人主体选不了「游戏」类目（游戏类目要企业主体 + 版号），小程序还不允许访问局域网 IP、也没有 SSE。
+          想分享最快的办法是上面那条隧道地址，微信里直接点开就是普通网页。</span></p>
+        <p><strong>能不能放到 B站 Toy / 静态托管？</strong><br />
+          <span class="small muted">Toy 这类平台发布的是「网页作品」，适合单机互动；本作是多人 + 实时同步，需要服务端。
+          除非改造成浏览器内 P2P（WebRTC），否则放上去只能玩单机部分。</span></p>
+        <p><strong>数据安全吗？</strong><br />
+          <span class="small muted">房间、答案、计时全在你自己的机器上，不经过任何第三方；管理入口带一次性令牌。
+          用隧道时流量会经过隧道服务商（cloudflared / ngrok / localtunnel）。</span></p>
+      </section>
+
+      <footer>
+        <p>
+          规则表、模块设计、界面文案均为本项目原创；《Keep Talking and Nobody Explodes》手册仅用于理解玩法结构，正文未复制。
+        </p>
+        <p><a href="https://github.com/BloodingKnight/keep-talking-bomb">GitHub 仓库</a> · <a href="https://github.com/BloodingKnight/keep-talking-bomb/releases">全部版本</a></p>
+      </footer>
+    </div>
+  </body>
+</html>

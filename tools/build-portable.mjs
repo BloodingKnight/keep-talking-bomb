@@ -17,7 +17,19 @@ const NAME = 'BombGame-win-x64';
 const OUT = path.join(DIST, NAME);
 const ZIP = path.join(DIST, NAME + '.zip');
 
-const SKIP_DIRS = new Set(['.git', 'dist', 'node_modules', '.vscode', '.idea', '.build', '.npmcache']);
+const SKIP_DIRS = new Set([
+  '.git',
+  'dist',
+  'node_modules',
+  '.vscode',
+  '.idea',
+  '.build',
+  '.npmcache',
+  // Tauri 相关：bundle-assets 里也有一个 90MB 的 node.exe，别再打一份进来
+  'src-tauri',
+  'keep-talking-bomb',
+  '.github',
+]);
 const SKIP_FILE = /^(manual-text.*\.txt|.*\.log|.*\.pdf|.*\.zip|\.DS_Store|Thumbs\.db|desktop\.ini)$/i;
 
 // ---------------------------------------------------------------- 文件收集
