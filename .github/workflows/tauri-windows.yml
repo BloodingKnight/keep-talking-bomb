@@ -55,6 +55,26 @@ jobs:
           Get-ChildItem src-tauri\target\release\bundle\msi\*.msi | Copy-Item -Destination out
           Get-ChildItem out
 
+      # 免安装版：exe + 同目录下的 bundle-assets（node.exe 与游戏文件）。
+      # 程序启动时按 exe 所在目录找资源，所以整个文件夹复制走就能用，不写注册表、不需要安装。
+      - name: 打免安装（绿色）版
+        run: |
+          $ver = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $dir = "out\portable"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item src-tauri\target\release\bombgame.exe "$dir\BombGame.exe"
+          Copy-Item src-tauri\bundle-assets "$dir\bundle-assets" -Recurse
+          Set-Content -Path "$dir\使用说明.txt" -Encoding UTF8 -Value @"
+          保持沟通就没人爆炸 —— 免安装版
+          1. 先解压（不要在压缩包里直接双击）。
+          2. 双击 BombGame.exe，会先显示"正在启动"，然后打开游戏窗口。
+          3. 大厅里有邀请二维码，朋友扫码/点链接加入；异地玩就用 node tools/share.mjs 的公网地址。
+          说明：本目录里的 bundle-assets 是内置的 Node 运行时和游戏文件，别删。
+          端口被占用会自动换 3211~3240，不用手动改。
+          "@
+          Compress-Archive -Path "$dir\*" -DestinationPath "out\BombGame_${ver}_portable.zip" -Force
+          Get-ChildItem out
+
       - uses: actions/upload-artifact@v4
         with:
           name: BombGame-tauri-windows

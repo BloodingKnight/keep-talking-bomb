@@ -1,6 +1,6 @@
 {
   "name": "keep-talking-bomb",
-  "version": "1.0.0",
+  "version": "1.1.8",
   "private": true,
   "description": "本地多人合作拆弹游戏：一人看炸弹、其他人查手册，面向同一局域网/同一台电脑的多人分屏信息合作",
   "type": "module",
@@ -19,7 +19,15 @@
     "tauri:dev": "npm run tauri:assets && cd src-tauri && cargo tauri dev",
     "tauri:build": "npm run tauri:assets && npm run tauri:icon && cd src-tauri && cargo tauri icon logo.png && cargo tauri build"
   },
-  "engines": { "node": ">=18" },
-  "keywords": ["coop", "bomb", "party-game", "local-multiplayer", "sse"],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "coop",
+    "bomb",
+    "party-game",
+    "local-multiplayer",
+    "sse"
+  ],
   "license": "MIT"
 }

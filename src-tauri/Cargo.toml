@@ -1,6 +1,6 @@
 [package]
 name = "bombgame"
-version = "1.0.0"
+version = "1.1.8"
 description = "保持沟通就没人爆炸 - 本地多人合作拆弹游戏"
 edition = "2021"
 rust-version = "1.77"

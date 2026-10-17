@@ -70,6 +70,7 @@ tools/_release113.mjs
 tools/build-portable.mjs
 tools/build-single.mjs
 tools/build-static-site.mjs
+tools/bump-version.mjs
 tools/check-live.mjs
 tools/check-maze.mjs
 tools/extract-pdf.mjs
