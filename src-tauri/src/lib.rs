@@ -47,6 +47,20 @@ fn candidate_roots(app: &AppHandle) -> Vec<PathBuf> {
     roots
 }
 
+/// 去掉 Windows 的扩展长度前缀（`\\?\`）。
+/// Tauri 的 resource_dir() 在 Windows 上返回的是 `\\?\C:\...`，
+/// 这种路径交给 Node 会炸（它会 realpath 到 `C:` 然后 EISDIR），所以统一清洗一遍。
+fn clean_path(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest);
+    }
+    p.to_path_buf()
+}
+
 /// 在候选目录里找 bundle-assets 下的文件
 fn find_asset(app: &AppHandle, rel: &str) -> Option<PathBuf> {
     for root in candidate_roots(app) {
@@ -57,7 +71,7 @@ fn find_asset(app: &AppHandle, rel: &str) -> Option<PathBuf> {
                 root.join(prefix).join(rel)
             };
             if p.exists() {
-                return Some(p);
+                return Some(clean_path(&p));
             }
         }
     }
@@ -175,8 +189,25 @@ fn spawn_server(app: &AppHandle, port: u16) -> Result<Child, String> {
     let work_dir = entry
         .parent()
         .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
+        .map(|p| clean_path(p))
         .unwrap_or_else(|| entry.clone());
+
+    // 把要执行的命令记进日志，下次出问题能直接看到
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path(app))
+    {
+        use std::io::Write;
+        let _ = writeln!(
+            f,
+            "--- spawn: {} {} {} (cwd {})",
+            node.display(),
+            entry.display(),
+            port,
+            work_dir.display()
+        );
+    }
 
     Command::new(&node)
         .arg(&entry)
