@@ -49,7 +49,8 @@ jobs:
       - name: 收集产物
         run: |
           mkdir out
-          copy src-tauri\target\release\bombgame.exe out\BombGame-桌面版.exe
+          # 只发安装包：target/release/bombgame.exe 单独拿出来是跑不了的
+          # （它依赖 resources 里的 node.exe 与 server/），发出去只会让人以为坏了。
           Get-ChildItem src-tauri\target\release\bundle\nsis\*.exe | Copy-Item -Destination out
           Get-ChildItem src-tauri\target\release\bundle\msi\*.msi | Copy-Item -Destination out
           Get-ChildItem out
