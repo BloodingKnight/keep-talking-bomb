@@ -5,6 +5,11 @@ description = "保持沟通就没人爆炸 - 本地多人合作拆弹游戏"
 edition = "2021"
 rust-version = "1.77"
 
+[lib]
+# 安卓需要 staticlib/cdylib；桌面用 rlib 给 main.rs 调
+name = "bombgame_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

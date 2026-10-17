@@ -38,6 +38,7 @@ src-tauri/dist-ui/error.html
 src-tauri/dist-ui/loading.html
 src-tauri/dist-ui/mobile.html
 src-tauri/logo.png
+src-tauri/src/lib.rs
 src-tauri/src/main.rs
 src-tauri/tauri.conf.json
 start.cmd
