@@ -425,6 +425,8 @@ const routes = {
       difficulties: DIFFICULTY_ORDER.map((d) => ({ id: d, ...DIFFICULTIES[d] })),
       roles: Object.values(ROLE_INFO).concat(EXTRA_EXPERT_ROLES),
       presets: ROLE_PRESETS,
+      // 客户端拿这个拼"邀请链接 / 二维码"，手机扫了就能进房间
+      network: { port: PORT, urls: LAN_IPS },
     });
   },
 
@@ -637,11 +639,13 @@ setInterval(() => {
 
 const PORT = Number(process.env.PORT || process.argv[2] || 3210);
 const HOST = process.env.HOST || '0.0.0.0';
+// 局域网地址：既给启动日志用，也给客户端的"邀请二维码"用（手机扫的就是它）
+const LAN_IPS = Object.values(os.networkInterfaces())
+  .flat()
+  .filter((n) => n && n.family === 'IPv4' && !n.internal)
+  .map((n) => n.address);
 server.listen(PORT, HOST, () => {
-  const lan = Object.values(os.networkInterfaces())
-    .flat()
-    .filter((n) => n && n.family === 'IPv4' && !n.internal)
-    .map((n) => n.address);
+  const lan = LAN_IPS;
   console.log(`[bomb] 服务已启动，端口 ${PORT}`);
   console.log(`[bomb] 本机打开:   http://localhost:${PORT}`);
   for (const ip of lan) console.log(`[bomb] 同一局域网: http://${ip}:${PORT}`);

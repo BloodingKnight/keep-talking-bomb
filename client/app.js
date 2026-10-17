@@ -3,6 +3,7 @@
 import { el, clear, $, fmtClock, toast } from './dom.js';
 import { renderBomb, renderPreviewModule } from './bomb.js';
 import { renderManual } from './manual.js';
+import { inviteUrl, inviteQrSvg } from './invite.js';
 
 const ROLE_FALLBACK = {
   defuser: { name: '拆弹者', icon: '🧰', tagline: '看着炸弹，动手操作', hint: '把看到的一切念出来，按专家的指令动手。' },
@@ -436,6 +437,8 @@ function renderLobby() {
   $('#btn-leave-top').classList.remove('hidden');
   $('#btn-close-top').classList.toggle('hidden', room.hostId !== app.playerId);
 
+  renderInvite();
+
   // role cards
   const cards = $('#role-cards');
   clear(cards);
@@ -501,11 +504,31 @@ function renderLobby() {
 }
 
 function copyInvite() {
-  const url = `${location.origin}/?room=${app.roomCode}`;
+  const url = inviteUrl({ network: app.catalog.network, roomCode: app.roomCode, origin: location.origin });
   navigator.clipboard?.writeText(url).then(
     () => toast('邀请链接已复制，发给队友即可'),
     () => toast(`邀请链接：${url}`, 5000),
   );
+}
+
+let inviteRenderedFor = '';
+
+function renderInvite() {
+  const card = $('#invite-card');
+  const box = $('#invite-qr');
+  const link = $('#invite-link');
+  if (!card || !box || !link) return;
+  const { url, svg } = inviteQrSvg({
+    network: app.catalog.network,
+    roomCode: app.roomCode,
+    origin: location.origin,
+  });
+  card.classList.remove('hidden');
+  link.textContent = url;
+  // 心跳每秒都会重渲染一次，二维码内容没变就别重建，否则会一直闪
+  if (inviteRenderedFor === url) return;
+  inviteRenderedFor = url;
+  box.innerHTML = svg;
 }
 
 // --------------------------------------------------------------------- game

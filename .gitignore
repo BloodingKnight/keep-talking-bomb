@@ -9,6 +9,16 @@ dist/
 .build/
 .npmcache/
 
+# Tauri 桌面版
+src-tauri/target/
+src-tauri/gen/
+# 由 tools/prepare-tauri-assets.mjs 生成（含 90MB 的 node.exe）
+src-tauri/bundle-assets/
+# 由 cargo tauri icon logo.png 生成
+src-tauri/icons/
+# 试跑 npm create tauri-app 留下的模板目录，与集成版无关
+keep-talking-bomb/
+
 # 运行期日志
 *.log
 server.log

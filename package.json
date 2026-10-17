@@ -10,7 +10,14 @@
     "dev": "node server/server.js 3210",
     "test": "node tests/selftest.mjs 40",
     "test:e2e": "node tests/run-e2e.mjs",
-    "manual:text": "node tools/extract-pdf.mjs"
+    "test:qr": "node tests/qr.mjs",
+    "manual:text": "node tools/extract-pdf.mjs",
+    "build:portable": "node tools/build-portable.mjs",
+    "build:single": "node tools/build-single.mjs",
+    "tauri:assets": "node tools/prepare-tauri-assets.mjs",
+    "tauri:icon": "node tools/make-icon.mjs",
+    "tauri:dev": "npm run tauri:assets && cd src-tauri && cargo tauri dev",
+    "tauri:build": "npm run tauri:assets && npm run tauri:icon && cd src-tauri && cargo tauri icon logo.png && cargo tauri build"
   },
   "engines": { "node": ">=18" },
   "keywords": ["coop", "bomb", "party-game", "local-multiplayer", "sse"],

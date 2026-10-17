@@ -343,20 +343,56 @@ node tools/build-single.mjs
 # -> dist/BombGame-win-x64-single.zip    （35 MB，里面只有那一个 exe）
 ```
 
-用 **Node SEA（Single Executable Application）** 把 `client/ lib/ server/` 作为资源嵌进 `node.exe`：
+用 **Node SEA（Single Executable Application）** 把整个游戏嵌进 `node.exe`：
 
-- 首次启动把内嵌文件释放到 `%LOCALAPPDATA%\BombGame\<构建号>\`（失败时依次回退到 `%TEMP%`
-  和 exe 旁边的 `.bomb-data/`），之后直接复用；
-- 然后用**真实的 ESM 模块**加载 `server.js` —— 跑的是和仓库里一模一样的代码，没有打包改写版本；
-- 双击（无参数）启动时会自动把浏览器打开，并把控制台切到 UTF-8 以便中文正常显示。
+- `client/` 的静态文件（html/css/js）在构建时**内联进 JS**（`globalThis.__BOMB_EMBEDDED_CLIENT__`），
+  `serveStatic` 优先从内存取 —— 所以 exe **运行时不往磁盘写任何文件**，只有解析路径用到 `CLIENT_DIR`；
+- `server/` 与 `lib/` 用 esbuild 打成**一个 CJS bundle**，作为 SEA 的 main；
+- 双击（无参数）启动会切 UTF-8、自动打开浏览器；
+- **能知道自己成功没有、也能关掉**：启动成功弹托盘气泡（含地址），`BombGame.exe --status`
+  弹出状态窗（是否在跑 / 进程号 / 地址），`BombGame.exe --stop` 结束它；
+- **单实例**：已经在跑的时候再双击，只会打开浏览器，不会又起一个看不见的进程；
+- **启动失败不再"闪一下就消失"**：打印堆栈、写 `%LOCALAPPDATA%\BombGame\BombGame.log`、弹消息框，然后退出。
 
-打包机需要（玩家不需要）：`cd .build && npm install --ignore-scripts postject`。
-构建号是内容指纹，改了代码会释放到新目录，不会用到旧的残留。
+> 它**没有窗口**是设计取舍（省掉 Electron 那 200MB）。想要"有窗口、能点关闭"的桌面版，用下面的方式二（Tauri）。
 
-> 已知代价：注入会让 `node.exe` 原本的 Authenticode 签名失效（`postject` 会提示
-> `The signature seems corrupted!`），所以第一次运行可能弹 SmartScreen，点「更多信息 → 仍要运行」即可。
+打包机需要（玩家不需要）：`cd .build && npm install --ignore-scripts postject esbuild`。
 
-### 方式二：Windows 绿色版（目录 + 启动器，便于改配置）
+> ⚠️ **杀软注意**：`BombGame.exe` 是"官方 node.exe + 注入启动代码"，注入会破坏它原本的
+> Authenticode 签名，所以 Windows 会当成未知发布者（个别情况下 Defender 的启发式还会误报）。
+> 现在的版本已经不释放文件了（去掉了最容易触发"释放器"启发式的行为），但**签名失效这一点无解**，
+> 除非买代码签名证书。**要给别人的话，优先发"方式二"的绿色版**：里面的 `node.exe` 是 Node
+> 官方原版、签名完好，基本不会被拦。
+
+### 方式二：Tauri 桌面版（有窗口、能关、有安装包）
+
+单个 exe 是**没有窗口**的（双击后只有浏览器 + 一个托盘气泡），如果你希望它像个正常桌面软件
+——启动中窗口、失败原因窗口、关闭窗口就退出——用 Tauri 壳：
+
+```
+src-tauri/src/main.rs   启动内置 node 子进程 → 等端口可用 → 用真窗口加载 http://127.0.0.1:3210
+src-tauri/tauri.conf.json  打包 node.exe 与 server/lib/client 为资源
+.github/workflows/tauri-windows.yml  在 GitHub 的 Windows runner 上编译（本机不需要 Rust）
+```
+
+**本机没 Rust 也能出安装包**（推荐这条路）：仓库 → **Actions** → `tauri-windows` → **Run workflow**。
+CI 会：跑二维码自检 → 准备内置 node.exe → `cargo tauri icon` → `cargo tauri build` →
+上传 `BombGame-桌面版.exe`、NSIS 安装包、MSI 三个产物。打 `v*` tag 时会自动挂到 Release。
+
+本机有 Rust（+ MSVC 构建工具）时也可以直接：
+
+```bash
+npm run tauri:assets     # 复制 node.exe 与游戏文件到 src-tauri/bundle-assets/
+npm run tauri:icon       # 生成 512x512 图标（自己画的 PNG，无依赖）
+cd src-tauri && cargo tauri dev      # 开发运行
+cd src-tauri && cargo tauri build    # 出安装包
+```
+
+> 为什么这个壳值得做：单文件 exe 之前有个真实的坑 —— 用户双击后**看不出有没有成功，也没法关掉**，
+> 反复双击还会留下好几个看不见的 `node.exe` 进程。Tauri 版把状态和退出都摆到窗口里了。
+> 另外单文件 exe 现在也补了 `--status` / `--stop` 和单实例保护（见方式一）。
+
+### 方式三：Windows 绿色版（**最好发这个**，原生 node.exe 不改动）
 
 一条命令打包，产物是**自带 Node 运行时**的压缩包，对方解压双击 `play.cmd` 就能玩：
 
@@ -378,7 +414,7 @@ node tools/build-portable.mjs
 > 打包机的 Node 版本就是玩家用的版本（直接取 `process.execPath`）。
 > `dist/` 已在 `.gitignore` 里，90 MB 的 node.exe 不会进仓库。
 
-### 方式三：公网在线版（发个链接就能玩，异地也行）
+### 方式四：公网在线版（发个链接就能玩，异地也行）
 
 服务端读 `PORT` 环境变量、支持 `BOMB_ADMIN_TOKEN`，所以任何能跑容器的平台都能直接部署：
 
@@ -391,7 +427,7 @@ docker run -d --name bombsite -p 3210:3210 -e BOMB_ADMIN_TOKEN=换成你的令�
 注意两点：**只能跑 1 个实例**（房间状态在内存里，多副本之间不共享房间）；建议用
 `BOMB_ADMIN_TOKEN` 固定管理令牌，否则每次重启都会变。
 
-### 方式四：微信小程序 —— 目前做不了，原因是硬门槛
+### 方式五：微信小程序 —— 目前做不了，原因是硬门槛
 
 不是技术实现不了，是平台规则卡死，具体三条：
 

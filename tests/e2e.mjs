@@ -272,13 +272,15 @@ async function main() {
   }
   const maxStrikes = s3.maxStrikes;
   let strikesMade = 0;
+  // 这些模块的"故意失误"策略是严格保证错的 —— 如果它们没记失误，就是服务端真有问题
+  const STRICT = new Set(['button', 'keypad', 'password', 'quiz', 'memory', 'wires', 'wires2', 'decoder', 'gears']);
   const exhausted = new Set(); // 已经"剪不出失误"的模块，别老盯着它
   for (let attempt = 0; attempt < 60 && strikesMade < maxStrikes; attempt++) {
     s3 = await state(room2, mute.id);
     if (s3.room.phase !== 'playing') break;
     const candidates = s3.bomb.moduleStates.filter((x) => x.status !== 'solved' && x.state && !exhausted.has(x.uid));
     const target =
-      candidates.find((x) => ['keypad', 'memory', 'password', 'quiz', 'simon', 'morse'].includes(x.id)) || candidates[0];
+      candidates.find((x) => STRICT.has(x.id)) || candidates.find((x) => ['simon', 'morse', 'signal'].includes(x.id)) || candidates[0];
     if (!target) {
       // 整颗炸弹被"误打误撞"拆完了（或者剩下的模块都剪不出失误）：重开一颗新的继续测失误上限
       exhausted.clear();
@@ -290,12 +292,14 @@ async function main() {
     if (res.strike) {
       strikesMade++;
       ok(`第 ${strikesMade}/${maxStrikes} 次失误（${target.title}）：${res.note}`);
-    } else if (res.error) {
-      // 这个模块这条路已经走不通了，下一轮换一个
+    } else if (res.solved || res.error) {
+      // 这个模块做不到稳定"故意失误"（或者路走不通）：换个模块继续
       exhausted.add(target.uid);
-    } else {
+    } else if (STRICT.has(target.id)) {
       fail(`故意失误没有被记录（${target.title}: ${JSON.stringify(res)}）`);
       break;
+    } else {
+      exhausted.add(target.uid);
     }
   }
   await mute.refresh();
@@ -498,9 +502,16 @@ async function makeStrike(client, uid) {
       await act({ type: 'press' });
       await sleep(320);
       await act({ type: 'strip' });
-      // 找一个两位秒数区间：既不含正确数字，也不是 0
-      const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter((d) => d !== S.digit);
-      const target = 10 + (digits.find((d) => d !== 0) || 1);
+      // 挑一个两位数，十位和个位都不等于正确数字。
+      // 注意 1x 的十位永远是 1，所以从 20 起挑 —— 否则正确数字是 1 时松手反而"对了"。
+      let target = 25;
+      for (let t = 20; t <= 59; t++) {
+        const s = String(t);
+        if (!s.includes(String(S.digit)) && s[1] !== '0') {
+          target = t;
+          break;
+        }
+      }
       await client.send({ type: 'debugSetTime', ms: (target - 1) * 1000 + 500 }).catch(() => {});
       await sleep(120);
       return act({ type: 'release' });
@@ -513,12 +524,19 @@ async function makeStrike(client, uid) {
       const dir = (w & 1) ? 'up' : (w & 2) ? 'right' : (w & 4) ? 'down' : 'left';
       return act({ type: 'move', dir });
     }
-    case 'password': return act({ type: 'submit' });
+    case 'password': {
+      // 转轮可能已经正好拼对了：先把一格转离答案，再提交
+      const i = st.slots.findIndex((slot, idx) => slot.letters[slot.pos] === S.word[idx]);
+      if (i >= 0) await act({ type: 'cycle', index: i, dir: 1 });
+      return act({ type: 'submit' });
+    }
     case 'quiz': return act({ type: 'choose', index: (S.index + 1) % st.options.length });
     case 'gears': return act({ type: 'choose', dir: S.answer === 'cw' ? 'ccw' : 'cw' });
     case 'balance': return act({ type: 'add', side: 0 });
     case 'decoder': {
-      await act({ type: 'digit', digit: '9' });
+      // 输入一个答案里没有的数字，保证是错的（否则答案是 9 时会"误中"）
+      const bad = '0123456789'.split('').find((d) => !String(S.answer).includes(d)) || '9';
+      await act({ type: 'digit', digit: bad });
       return act({ type: 'submit' });
     }
     case 'signal': return act({ type: 'sendLetter', marks: ['dot'] });

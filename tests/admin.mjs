@@ -144,9 +144,18 @@ if (!rp || !rp.views?.length) {
 
   // 两个专家座位的条目应该互补（有重合但不是包含关系）
   const rowsOf = (m) => m.sections.flatMap((s) => s.groups.flatMap((g) => (g.rows || []).map((r) => `${s.uid}|${r.label}`)));
-  const a = rowsOf(byKey.blind.manual), b = rowsOf(byKey.expert2.manual);
+  let a = rowsOf(byKey.blind.manual);
+  let b = rowsOf(byKey.expert2.manual);
+  // 极少数炸弹全是"不可拆分"的模块，两半会碰巧一样 —— 换一颗炸弹再比，别让测试看运气
+  for (let tries = 0; tries < 6 && (!a.length || !b.length || JSON.stringify(a) === JSON.stringify(b)); tries++) {
+    const again = await admin('/api/admin/action', { type: 'rolePreview', difficulty: 'hard', moduleCount: 5 });
+    const views = Object.fromEntries((again.data.rolePreview?.views || []).map((v) => [v.key, v]));
+    if (!views.blind?.manual || !views.expert2?.manual) continue;
+    a = rowsOf(views.blind.manual);
+    b = rowsOf(views.expert2.manual);
+  }
   if (a.length && b.length && JSON.stringify(a) !== JSON.stringify(b)) ok(`半本手册互补：座位0 ${a.length} 条 / 座位1 ${b.length} 条`);
-  else fail('两半手册没有差异');
+  else fail('两半手册没有差异（换了 6 颗炸弹都一样，可能是拆分逻辑坏了）');
   if (!JSON.stringify(rp).includes('"solution"')) ok('角色视角里没有泄漏 solution 字段');
   else fail('角色视角泄漏了 solution');
 }

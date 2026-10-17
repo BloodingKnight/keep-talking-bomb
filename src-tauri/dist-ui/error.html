@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>BombGame 启动失败</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 22px; height: 100vh; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 12px;
+        background: #0b0f14; color: #dce6f2;
+        font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      h1 { font-size: 16px; margin: 0; color: #ff8a80; }
+      pre {
+        margin: 0; flex: 1; overflow: auto; white-space: pre-wrap; word-break: break-word;
+        background: #0d131b; border: 1px solid #263141; border-radius: 8px; padding: 10px;
+        font-size: 12px; line-height: 1.5; color: #b9c7d8;
+      }
+      p { margin: 0; color: #8fa3bb; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>游戏服务没能启动</h1>
+    <pre id="msg">（没有拿到错误信息）</pre>
+    <p>常见原因：端口 3210 被别的程序占用；或者杀毒软件拦截了内置的 node.exe。详情见应用目录下的日志。</p>
+  </body>
+</html>
