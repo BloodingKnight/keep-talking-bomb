@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "本应用不通过 IPC 调用后端命令，只需要核心窗口能力",
+  "windows": ["main", "splash", "error"],
+  "permissions": ["core:default"]
+}
