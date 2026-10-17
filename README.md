@@ -335,14 +335,35 @@ node tests/run-e2e.mjs
 
 ## 分发：发给别人玩（不用装 Node）
 
-### 方式一：Windows 绿色版（推荐，面对面玩）
+### 方式一：单个 exe（最省事，面对面玩）
+
+```bash
+node tools/build-single.mjs
+# -> dist/BombGame.exe                   （91 MB，双击即玩，旁边不需要任何文件）
+# -> dist/BombGame-win-x64-single.zip    （35 MB，里面只有那一个 exe）
+```
+
+用 **Node SEA（Single Executable Application）** 把 `client/ lib/ server/` 作为资源嵌进 `node.exe`：
+
+- 首次启动把内嵌文件释放到 `%LOCALAPPDATA%\BombGame\<构建号>\`（失败时依次回退到 `%TEMP%`
+  和 exe 旁边的 `.bomb-data/`），之后直接复用；
+- 然后用**真实的 ESM 模块**加载 `server.js` —— 跑的是和仓库里一模一样的代码，没有打包改写版本；
+- 双击（无参数）启动时会自动把浏览器打开，并把控制台切到 UTF-8 以便中文正常显示。
+
+打包机需要（玩家不需要）：`cd .build && npm install --ignore-scripts postject`。
+构建号是内容指纹，改了代码会释放到新目录，不会用到旧的残留。
+
+> 已知代价：注入会让 `node.exe` 原本的 Authenticode 签名失效（`postject` 会提示
+> `The signature seems corrupted!`），所以第一次运行可能弹 SmartScreen，点「更多信息 → 仍要运行」即可。
+
+### 方式二：Windows 绿色版（目录 + 启动器，便于改配置）
 
 一条命令打包，产物是**自带 Node 运行时**的压缩包，对方解压双击 `play.cmd` 就能玩：
 
 ```bash
 node tools/build-portable.mjs
 # -> dist/BombGame-win-x64/       （目录，约 91 MB）
-# -> dist/BombGame-win-x64.zip    （压缩包，约 35 MB，47 个文件）
+# -> dist/BombGame-win-x64.zip    （压缩包，约 35 MB，48 个文件）
 ```
 
 包里有：`node\node.exe`（Node 运行时）+ `play.cmd`（启动器，会把自带的 node 塞进 PATH，再调用
@@ -357,7 +378,7 @@ node tools/build-portable.mjs
 > 打包机的 Node 版本就是玩家用的版本（直接取 `process.execPath`）。
 > `dist/` 已在 `.gitignore` 里，90 MB 的 node.exe 不会进仓库。
 
-### 方式二：公网在线版（发个链接就能玩，异地也行）
+### 方式三：公网在线版（发个链接就能玩，异地也行）
 
 服务端读 `PORT` 环境变量、支持 `BOMB_ADMIN_TOKEN`，所以任何能跑容器的平台都能直接部署：
 
@@ -370,7 +391,7 @@ docker run -d --name bombsite -p 3210:3210 -e BOMB_ADMIN_TOKEN=换成你的令�
 注意两点：**只能跑 1 个实例**（房间状态在内存里，多副本之间不共享房间）；建议用
 `BOMB_ADMIN_TOKEN` 固定管理令牌，否则每次重启都会变。
 
-### 方式三：微信小程序 —— 目前做不了，原因是硬门槛
+### 方式四：微信小程序 —— 目前做不了，原因是硬门槛
 
 不是技术实现不了，是平台规则卡死，具体三条：
 
@@ -386,12 +407,17 @@ docker run -d --name bombsite -p 3210:3210 -e BOMB_ADMIN_TOKEN=换成你的令�
 把链接发到微信里，对方点开就是浏览器 H5，扫码/点链接即玩。真要做小程序，需要企业主体 + 版号 +
 备案域名 + WebSocket 改造，不是加个壳的事。
 
-### 想要"单个 exe 文件"？
+### 为什么没选 Electron？
 
-技术上可以（Node 25 的 SEA + `postject` 注入），但有两个前提：打包机要能 `npm install postject`，
-而且要把 `client/` 里的静态文件通过 `sea.getAsset()` 嵌进运行时（现在 `serveStatic` 是直接读磁盘的，
-需要改成"先查内嵌资源、再退回磁盘"）。README 里的绿色版已经达到了"玩家不用装 Node"的目的，
-单文件 exe 只是省一次解压，收益不大，暂未做。
+Electron 能让房主"双击一个真正的桌面 App"，但代价是：
+
+- 体积从 **35 MB 涨到 200 MB+**（Electron 自带 Chromium）；
+- **只改善房主那一端** —— 其他玩家本来就只能用手机/电脑浏览器打开，一点没变；
+- 还得处理签名、自动更新、杀毒误报。
+
+同样的"原生感"用更便宜的方式就够了：单文件 exe（91 MB）+ 自动开浏览器；要更小可以上 Tauri
+（用系统 WebView2，10 MB 级别），但需要 Rust 工具链。真正对"分享给别人玩"有帮助的其实是
+**局域网二维码**：房主大厅显示一个二维码，朋友扫一下就进房间，比手打 4 位房间号顺手得多。
 
 ---
 
@@ -403,7 +429,9 @@ start.ps1            Windows 启动脚本：端口 / 令牌 / 测试模式 / 后
 stop.ps1             停掉后台模式起的服务（只结束 node 进程）
 start.sh             macOS / Linux 启动脚本
 Dockerfile           公网部署用的镜像（只带运行需要的文件）
-tools/build-portable.mjs  打 Windows 绿色版 + 手写 zip（无第三方依赖）
+tools/build-single.mjs    打单文件 exe（Node SEA + postject 注入）
+tools/build-portable.mjs  打 Windows 绿色版（内置 node.exe + play.cmd）
+tools/lib-zip.mjs         极简 zip 写入（两个构建脚本共用，只依赖 Node 自带 zlib）
 server/server.js     HTTP + SSE 服务、路由、广播、测试后门
 server/room.js       会话/房间管理：加入、座位、角色、阶段、失误、结算
 lib/bomb.js          炸弹生成（外壳信息 + 模块选取 + 难度权重）与计分
