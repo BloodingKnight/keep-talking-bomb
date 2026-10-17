@@ -458,7 +458,10 @@ node tools/build-static-site.mjs        # 生成 site/（静态客户端）
 cd cloudflare && wrangler deploy        # 需要 wrangler login
 ```
 
-客户端指向它：`https://你的静态页/?server=https://bombgame.xxx.workers.dev`
+客户端指向它：`https://你的静态页/?server=https://bomb.mifan.eu.cc`
+
+> 默认对外地址就是 **<https://bomb.mifan.eu.cc>**（Worker 绑的自定义域名，在 `wrangler.toml` 的 `routes` 里）。
+> 想换地址就改那一条，同时把 `functions/api/[[path]].js` 里的 `DEFAULT_ORIGIN` 一起改。
 
 > **注意**：Durable Objects 属于 Workers 付费计划（$5/月起，免费计划是否包含以控制台为准）；
 > DO 空闲会被驱逐，没人连着时房间状态会丢（本地版也是内存态）。

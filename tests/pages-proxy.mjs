@@ -119,6 +119,28 @@ try {
 } finally {
   server.kill();
   await sleep(300);
-  console.log(`\n失败 ${failures} 项`);
-  process.exitCode = failures ? 1 : 0;
+console.log('— 默认地址一致性 —');
+{
+  // wrangler.toml 里 Worker 绑的域名，必须和 Pages 前门默认指向的地址一致，
+  // 否则两边一改就容易忘、线上 502。
+  const fs = await import('node:fs');
+  const toml = fs.readFileSync(path.join(ROOT, 'wrangler.toml'), 'utf8');
+  const fnSrc = fs.readFileSync(path.join(ROOT, 'functions', 'api', '[[path]].js'), 'utf8');
+  const route = /pattern\s*=\s*"([^"]+)"/.exec(toml);
+  const def = /DEFAULT_ORIGIN\s*=\s*'([^']+)'/.exec(fnSrc);
+  if (route && def) {
+    const fromRoute = `https://${route[1].replace(/\/+$/, '')}`;
+    if (fromRoute === def[1].replace(/\/+$/, '')) {
+      ok(`wrangler.toml 的域名与前门默认地址一致：${def[1]}`);
+    } else {
+      fail(`两处默认地址不一致：wrangler.toml=${fromRoute} / DEFAULT_ORIGIN=${def[1]}`);
+    }
+  } else {
+    fail(`没能解析出默认地址（route=${route && route[1]} / default=${def && def[1]}）`);
+  }
+}
+
+console.log('');
+console.log(`失败 ${failures} 项`);
+process.exitCode = failures ? 1 : 0;
 }

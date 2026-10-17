@@ -3,8 +3,9 @@
 # 部署方式（Cloudflare Pages 连 GitHub）：
 #   构建命令: node tools/build-static-site.mjs
 #   输出目录: site
-#   然后在 Pages 项目的 Settings -> Variables and Secrets 里加：
-#     GAME_ORIGIN = https://你的 Worker 地址 或 https://你的云主机域名
+#   然后在 Pages 项目的 Settings -> Variables and Secrets 里加（可选）：
+#     GAME_ORIGIN = https://bomb.mifan.eu.cc
+#   不配也行 —— 代码里的 DEFAULT_ORIGIN 已经默认指向 https://bomb.mifan.eu.cc
 #
 # 这样浏览器只访问 <项目>.pages.dev 一个域名：
 #   · 静态页面由 Pages 提供

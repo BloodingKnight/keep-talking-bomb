@@ -9,10 +9,10 @@
 //   2. 下面的 DEFAULT_ORIGIN
 //
 // 这个前门指向什么都行：
-//   · Cloudflare Worker（wrangler deploy 出来的 https://bombgame.<子域>.workers.dev）
+//   · Cloudflare Worker（本项目的默认地址 https://bomb.mifan.eu.cc）
 //   · 自己的云主机（https://bomb.mydomain.com）
 //   · 甚至家里的电脑 + 内网穿透（只要 CF 边缘能访问到）
-const DEFAULT_ORIGIN = 'https://bombgame.example.workers.dev';
+const DEFAULT_ORIGIN = 'https://bomb.mifan.eu.cc';
 
 const PASS_HEADERS = ['content-type', 'accept', 'x-admin-token'];
 

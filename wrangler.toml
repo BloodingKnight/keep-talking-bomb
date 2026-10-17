@@ -22,12 +22,17 @@ compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]
 
 # ---------------------------------------------------------------- 自定义域名（国内强烈建议）
+# 默认对外地址：https://bomb.mifan.eu.cc
+#
 # workers.dev 这个默认域名在国内长期被封锁（Pages 的 pages.dev 往往是通的），
-# 所以给国内朋友用就绑自己的域名（域名要托管在 Cloudflare，NS 指过来）：
-#
-#   routes = [{ pattern = "bomb.example.com", custom_domain = true }]
-#
-# 绑好后客户端地址就是 https://bomb.example.com/，不再走 workers.dev。
+# 所以 Worker 绑一个自己的域名对外提供服务。
+# 前提：域名（mifan.eu.cc）已经托管在同一个 Cloudflare 账号下（NS 指到 CF）。
+# 如果你的域名不在这个账号里，把下面这两行注释掉、改回 workers.dev 即可。
+routes = [
+  { pattern = "bomb.mifan.eu.cc", custom_domain = true }
+]
+
+# 绑好后客户端地址就是 https://bomb.mifan.eu.cc/，不再走 workers.dev。
 # 注意：即使绑了自有域名，大陆访问仍不保证稳定（Cloudflare 跨境线路问题），
 # 只是比 workers.dev 好很多。对国内最稳的仍然是云主机 / 国内内网穿透。
 
