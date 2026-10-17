@@ -85,7 +85,8 @@ export class RoomDurableObject {
     const room = this.roomByCode(url.searchParams.get('room'));
     const player = room.players[url.searchParams.get('player')];
     if (!player) return json({ error: '玩家不在这个房间里' }, 404);
-    return json(playerState(room, player));
+    // 契约必须和本地版一致：{ rev, state }（客户端 applyState(payload.state, payload.rev)）
+    return json({ rev: room.rev || 0, state: playerState(room, player) });
   }
 
   // ---------------------------------------------------------------- 动作
@@ -195,7 +196,7 @@ export class RoomDurableObject {
         self.subs.add(sub);
         self.ensureTicker();
         // 先推一次当前状态，客户端不用等下一个 tick
-        sub.pushData(playerState(room, player));
+        sub.pushData({ rev: room.rev || 0, state: playerState(room, player) });
       },
       cancel() {
         closed = true;
@@ -249,6 +250,9 @@ export class RoomDurableObject {
 
   broadcast(room) {
     if (!room) return;
+    // 和本地版一致：每次广播把 rev +1，客户端据此丢弃乱序的旧帧
+    room.rev = (room.rev || 0) + 1;
+    room.lastActivity = Date.now();
     for (const sub of [...this.subs]) {
       const player = room.players[sub.playerId];
       if (!player) {
@@ -259,7 +263,7 @@ export class RoomDurableObject {
         continue;
       }
       try {
-        this.push(sub, 'state', playerState(room, player));
+        this.push(sub, 'state', { rev: room.rev, state: playerState(room, player) });
       } catch {
         this.subs.delete(sub);
       }

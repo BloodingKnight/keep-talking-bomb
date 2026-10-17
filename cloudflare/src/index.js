@@ -96,7 +96,13 @@ export default {
 
       const route = path.slice('/api/'.length); // join / state / action / events
       const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-      const target = `https://room/${route}?room=${encodeURIComponent(code)}`;
+
+      // 原样保留调用方的全部查询参数（尤其是 player！）
+      // 之前只拼了 ?room=…，导致 /api/state 和 /api/events 到 DO 时没有 player，
+      // DO 回 404，浏览器里的 EventSource 就报错 —— 右上角显示"连接断开"。
+      const qs = new URLSearchParams(url.searchParams);
+      if (!qs.get('room')) qs.set('room', code);
+      const target = `https://room/${route}?${qs.toString()}`;
       const init = {
         method: request.method,
         headers: { 'content-type': 'application/json' },

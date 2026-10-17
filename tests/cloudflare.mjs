@@ -69,12 +69,16 @@ const guestId = guest.data.playerId;
 
 {
   const s = await call(`/state?room=ABCD&player=${hostId}`);
-  if (s.status === 200 && s.data.room?.phase === 'lobby' && s.data.room.players.length === 2) {
-    ok(`/state 正常：阶段 ${s.data.room.phase}，${s.data.room.players.length} 人`);
+  // 契约：{ rev, state } —— 客户端是 applyState(payload.state, payload.rev)
+  const st = s.data.state;
+  if (s.status === 200 && st?.room?.phase === 'lobby' && st.room.players.length === 2) {
+    ok(`/state 正常：阶段 ${st.room.phase}，${st.room.players.length} 人`);
   } else {
     fail(`/state 不对：${JSON.stringify(s.data).slice(0, 240)}`);
   }
-  if (s.data.you?.id === hostId && s.data.catalog === undefined) ok('视图是按玩家过滤的（you 字段正确）');
+  if (typeof s.data.rev === 'number') ok(`/state 带上了 rev（${s.data.rev}）——客户端靠它丢弃乱序旧帧`);
+  else fail('/state 缺少 rev 字段，客户端 applyState 会拿到 undefined');
+  if (st?.you?.id === hostId) ok('视图是按玩家过滤的（you 字段正确）');
 }
 
 console.log('\n— DO：动作（角色 / 开始 / 模块）—');
@@ -89,16 +93,15 @@ console.log('\n— DO：动作（角色 / 开始 / 模块）—');
   else fail(`开始游戏失败：${start.status} ${JSON.stringify(start.data)}`);
 
   const s = await call(`/state?room=ABCD&player=${hostId}`);
-  if (s.data.room?.phase === 'playing' && s.data.bomb?.moduleStates?.length > 0) {
-    ok(
-      `进入游戏：${s.data.bomb.moduleStates.length} 个模块，剩余 ${Math.round((s.data.remainingMs || 0) / 1000)} 秒`,
-    );
+  const st = s.data.state || {};
+  if (st.room?.phase === 'playing' && st.bomb?.moduleStates?.length > 0) {
+    ok(`进入游戏：${st.bomb.moduleStates.length} 个模块，剩余 ${Math.round((st.remainingMs || 0) / 1000)} 秒`);
   } else {
-    fail(`没进入游戏：${JSON.stringify(s.data.bomb || s.data.room).slice(0, 200)}`);
+    fail(`没进入游戏：${JSON.stringify(st.bomb || st.room).slice(0, 200)}`);
   }
 
   // 拆弹者用错的动作 → 应该记失误（服务端权威逻辑原样复用）
-  const mod = s.data.bomb.moduleStates[0];
+  const mod = st.bomb.moduleStates[0];
   const wrong = await call('/action', {
     method: 'POST',
     body: { room: 'ABCD', playerId: hostId, type: 'module', uid: mod.uid, action: { type: 'tap' } },
@@ -131,11 +134,79 @@ console.log('\n— DO：SSE —');
   } else {
     fail(`SSE 第一帧格式不对（客户端会收不到）：${first.slice(0, 120)}`);
   }
+  // 还要是 { rev, state } 包裹，否则客户端 applyState(undefined) 页面不更新
+  const payload = JSON.parse(first.replace(/^data: /, '').trim());
+  if (typeof payload.rev === 'number' && payload.state?.you?.id === hostId) {
+    ok(`SSE 帧结构正确：{ rev: ${payload.rev}, state }`);
+  } else {
+    fail(`SSE 帧结构不对（客户端会拿不到 state）：${JSON.stringify(payload).slice(0, 160)}`);
+  }
 
   await reader.cancel();
   room.stopTickerIfIdle();
   if (!room.ticker) ok('取消订阅后定时器停掉了（不会白烧 CPU）');
   else fail('订阅取消后 ticker 还在跑');
+}
+
+console.log('\n— Worker 转发（关键：查询参数不能被吞掉）—');
+{
+  // 假 ROOMS 绑定：把 Worker 的 stub.fetch 转给我们手里的 DO，并记录它收到的 URL
+  const inner = new RoomDurableObject({}, {});
+  const seen = [];
+  const env = {
+    ROOMS: {
+      idFromName: (name) => name,
+      get: () => ({
+        fetch: (target, init) => {
+          seen.push(String(target));
+          return inner.fetch(new Request(String(target), init));
+        },
+      }),
+    },
+  };
+  const wfetch = async (p, init) => {
+    const res = await worker.fetch(new Request(`https://bomb.example.workers.dev${p}`, init), env);
+    return res;
+  };
+
+  const created = await wfetch('/api/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Worker 房主' }),
+  });
+  const cj = await created.json();
+  if (created.status === 200 && cj.roomCode) ok(`Worker /api/create 成功（房间 ${cj.roomCode}）`);
+  else fail(`Worker /api/create 失败：${created.status} ${JSON.stringify(cj)}`);
+
+  const code = cj.roomCode;
+  const pid = cj.playerId;
+
+  const stateRes = await wfetch(`/api/state?room=${code}&player=${pid}`);
+  const stateJson = await stateRes.json().catch(() => ({}));
+  const stateUrl = seen.find((u) => u.includes('/state')) || '';
+  if (stateUrl.includes(`player=${pid}`)) ok('转发 /api/state 时保留了 player 参数');
+  else fail(`转发 /api/state 丢了 player：${stateUrl}`);
+  if (stateRes.status === 200 && stateJson.state?.room?.code === code) ok('Worker /api/state 返回正常');
+  else fail(`Worker /api/state 失败：${stateRes.status} ${JSON.stringify(stateJson).slice(0, 160)}`);
+
+  // 这一条就是用户报的"点击加入后右上角连接断开"：SSE 到 DO 时必须带 player
+  const sseRes = await wfetch(`/api/events?room=${code}&player=${pid}`);
+  const sseUrl = seen.find((u) => u.includes('/events')) || '';
+  const ct = sseRes.headers.get('content-type') || '';
+  if (sseUrl.includes(`player=${pid}`)) ok('转发 /api/events 时保留了 player 参数');
+  else fail(`转发 /api/events 丢了 player（EventSource 会直接报错）：${sseUrl}`);
+  if (sseRes.status === 200 && ct.includes('text/event-stream')) ok(`SSE 透传正常（${ct}）`);
+  else fail(`SSE 转发失败：${sseRes.status} ${ct}`);
+
+  if (sseRes.body) {
+    const reader = sseRes.body.getReader();
+    const { value } = await reader.read();
+    const text = new TextDecoder().decode(value || new Uint8Array());
+    if (text.includes('data: {')) ok('SSE 第一帧经 Worker 透传后仍然可读（无名事件）');
+    else fail(`SSE 第一帧经转发后不对：${text.slice(0, 100)}`);
+    await reader.cancel();
+  }
+  inner.stopTickerIfIdle();
 }
 
 console.log('\n— 房间不存在时的行为 —');
