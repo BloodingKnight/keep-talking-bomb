@@ -28,11 +28,15 @@
       <span id="room-badge" class="badge hidden"></span>
       <span id="role-badge" class="badge hidden"></span>
       <span id="link-badge" class="badge warn hidden">连接断开，正在重连…</span>
+      <button id="btn-focus" class="ghost small hidden" title="切到单块专注视图（快捷键 F）">专注</button>
       <a class="badge" href="/tutorial" target="_blank" rel="noopener" style="text-decoration:none">📖 教程</a>
       <button id="btn-leave-top" class="ghost small hidden">退出房间</button>
       <button id="btn-close-top" class="ghost small hidden">关闭房间</button>
     </div>
   </header>
+
+  <!-- 手机/平板常驻的迷你状态条（盲操猴只看到失误灯，不显示数字时间） -->
+  <div id="mini-hud" class="mini-hud hidden" aria-live="off"></div>
 
   <main>
     <!-- 静态托管（EdgeOne / GitHub Pages）时用来填房主地址 -->
@@ -86,7 +90,7 @@
     <!-- ============================ LOBBY =========================== -->
     <section id="stage-lobby" class="stage hidden">
       <div class="lobby-grid">
-        <div class="panel">
+        <div class="panel" data-pane="players">
           <h2>玩家 <span id="lobby-count" class="muted"></span></h2>
           <div id="lobby-players" class="players"></div>
           <div class="row wrap">
@@ -105,13 +109,13 @@
             </div>
           </div>
         </div>
-        <div class="panel">
+        <div class="panel" data-pane="roles">
           <h2>挑选角色</h2>
           <p class="muted">点一下角色卡即可切换。至少要有一个拆弹者和一个专家。</p>
           <div class="row wrap" id="role-presets" style="margin-bottom:10px"></div>
           <div id="role-cards" class="role-cards"></div>
         </div>
-        <div class="panel">
+        <div class="panel" data-pane="settings">
           <h2>关卡设置 <span class="muted">（房主）</span></h2>
           <label>难度<select id="set-difficulty"></select></label>
           <div id="diff-desc" class="muted small"></div>
@@ -131,7 +135,7 @@
           <div id="lobby-error" class="error"></div>
           <div id="lobby-modules" class="muted small"></div>
         </div>
-        <div class="panel chat-panel">
+        <div class="panel chat-panel" data-pane="players">
           <h2>文字频道</h2>
           <p class="muted small">给不能说话的玩家（静默操作员）用的，也可以用来传文字情报。</p>
           <div id="lobby-chat" class="chat"></div>
@@ -141,14 +145,14 @@
           </form>
         </div>
       </div>
+      <nav class="pane-tabs" data-tabs="stage-lobby" aria-label="切换区块"></nav>
     </section>
 
     <!-- ============================ GAME ============================ -->
     <section id="stage-game" class="stage hidden">
-      <div class="game-grid">
-        <aside class="panel side">
+      <div class="game-grid" data-panes="game">
+        <aside class="panel side" data-pane="status">
           <div id="hud"></div>
-          <div id="signal-panel"></div>
           <div id="status-feed" class="feed"></div>
           <div class="row">
             <button id="btn-help" class="ghost small">我的角色</button>
@@ -156,9 +160,13 @@
           </div>
         </aside>
 
-        <div id="main-area"></div>
+        <div id="main-area" data-pane="main"></div>
 
-        <aside class="panel chat-panel side">
+        <aside class="panel side" data-pane="signals">
+          <div id="signal-panel"></div>
+        </aside>
+
+        <aside class="panel chat-panel side" data-pane="chat">
           <h2>文字频道</h2>
           <div id="game-chat" class="chat"></div>
           <form id="game-chat-form" class="chat-form">
@@ -167,6 +175,7 @@
           </form>
         </aside>
       </div>
+      <nav class="pane-tabs" data-tabs="stage-game" aria-label="切换区块"></nav>
     </section>
 
     <!-- ============================ BENCH (host) ============================ -->

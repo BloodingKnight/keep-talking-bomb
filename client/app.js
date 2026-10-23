@@ -3,6 +3,7 @@
 import { el, clear, $, fmtClock, toast } from './dom.js';
 import { renderBomb, renderPreviewModule } from './bomb.js';
 import { renderManual } from './manual.js';
+import { panesForRole, defaultPaneForRole, LOBBY_PANES, defaultLobbyPane, layoutForWidth, paneByIndex } from './panes.js';
 import { inviteUrl, inviteQrSvg } from './invite.js';
 
 const ROLE_FALLBACK = {
@@ -192,6 +193,7 @@ async function boot() {
   bindLobby();
   bindGame();
   bindEnd();
+  bindPanes();
   loadCatalog();
   const saved = restoreSession();
   if (saved && saved.code) {
@@ -314,6 +316,7 @@ function showStage(which) {
     $('#role-badge').classList.add('hidden');
     loadCatalog();
   }
+  mountPanes();
 }
 
 // --------------------------------------------------- host module test bench
@@ -636,6 +639,7 @@ function renderGame() {
   $('#btn-close-top').classList.toggle('hidden', st.room.hostId !== app.playerId);
 
   renderHud();
+  renderMiniHud();
   renderFeed();
   renderSignals();
 
@@ -895,3 +899,129 @@ async function act(uid, action) {
 }
 
 boot();
+
+// ------------------------------------------------------------------ 分块布局
+// 设计见 docs/ui-design.md：五块固定，角色决定主区内容与标签顺序，
+// 宽度决定同时可见几块（手机 1 / 平板 2 / 电脑 4），电脑可切"专注"变 1 块。
+const PANE_STATE = { 'stage-game': null, 'stage-lobby': null };
+let focusMode = false;
+
+function paneItemsFor(stageId) {
+  if (stageId === 'stage-game') return panesForRole(app.state?.you?.role);
+  return LOBBY_PANES;
+}
+
+function applyStageLayout(stage) {
+  const w = window.innerWidth;
+  const mode = focusMode ? 'phone' : layoutForWidth(w);
+  const isGame = stage.id === 'stage-game';
+  const single = isGame ? mode === 'phone' : w < 640;
+  stage.classList.toggle('single', single);
+  stage.classList.toggle('twopane', isGame && mode === 'tablet');
+  const btn = $('#btn-focus');
+  if (btn) {
+    const show = isGame && w >= 1024 && !!app.state;
+    btn.classList.toggle('hidden', !show);
+    btn.textContent = focusMode ? '退出专注' : '专注';
+  }
+}
+
+function setPane(stageId, key) {
+  const stage = document.getElementById(stageId);
+  if (!stage) return;
+  const items = paneItemsFor(stageId);
+  const valid = items.some((i) => i.key === key) ? key : (items[0] && items[0].key);
+  PANE_STATE[stageId] = valid;
+  for (const p of stage.querySelectorAll('[data-pane]')) p.classList.toggle('is-active', p.dataset.pane === valid);
+  for (const b of stage.querySelectorAll('.pane-tab')) {
+    const on = b.dataset.tab === valid;
+    b.classList.toggle('is-active', on);
+    if (on) {
+      const dot = b.querySelector('.pt-dot');
+      if (dot) dot.classList.add('hidden');
+    }
+  }
+}
+
+function mountPanes() {
+  for (const stage of document.querySelectorAll('.stage')) {
+    const nav = stage.querySelector('.pane-tabs');
+    if (!nav) continue;
+    const items = paneItemsFor(stage.id);
+    const sig = items.map((i) => i.key + ':' + i.label + ':' + i.icon).join('|');
+    if (nav.dataset.sig !== sig) {
+      clear(nav);
+      for (const it of items) {
+        nav.append(
+          el('button', { class: 'pane-tab', dataset: { tab: it.key }, onClick: () => setPane(stage.id, it.key) }, [
+            el('span', { class: 'pt-icon', text: it.icon }),
+            el('span', { class: 'pt-label', text: it.label }),
+            el('span', { class: 'pt-dot hidden' }),
+          ]),
+        );
+      }
+      nav.dataset.sig = sig;
+    }
+    applyStageLayout(stage);
+    const fallback = stage.id === 'stage-game' ? defaultPaneForRole() : defaultLobbyPane();
+    setPane(stage.id, PANE_STATE[stage.id] || fallback);
+  }
+}
+
+/** 不在某个块上时，在标签上点一个小圆点（聊天/信号） */
+function bumpUnread(stageId, key) {
+  const btn = document.querySelector('#' + stageId + ' .pane-tab[data-tab="' + key + '"]');
+  if (!btn || btn.classList.contains('is-active')) return;
+  const dot = btn.querySelector('.pt-dot');
+  if (dot) dot.classList.remove('hidden');
+}
+
+function bindPanes() {
+  const btn = $('#btn-focus');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      focusMode = !focusMode;
+      mountPanes();
+    });
+  }
+  let timer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(timer);
+    timer = setTimeout(mountPanes, 120);
+  });
+  document.addEventListener('keydown', (e) => {
+    const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
+    if (/input|textarea|select/.test(tag)) return;
+    if (e.key === 'f' || e.key === 'F') {
+      const b = $('#btn-focus');
+      if (b && !b.classList.contains('hidden')) {
+        focusMode = !focusMode;
+        mountPanes();
+      }
+      return;
+    }
+    if (!focusMode) return;
+    const pane = paneByIndex(paneItemsFor('stage-game'), Number(e.key));
+    if (pane) setPane('stage-game', pane);
+  });
+}
+
+/** 迷你状态条：手机上任何块下都能看到倒计时/失误（盲操猴只看到失误灯） */
+function renderMiniHud() {
+  const box = $('#mini-hud');
+  if (!box) return;
+  const st = app.state;
+  const playing = !!(st && st.room && st.room.phase === 'playing');
+  const show = playing && window.innerWidth < 1024;
+  box.classList.toggle('hidden', !show);
+  clear(box);
+  if (!show) return;
+  const canTime = !!(st.you && st.you.roleInfo && st.you.roleInfo.canSeeTime);
+  const remain = Math.max(0, st.remainingMs || 0);
+  box.append(el('span', { class: 'mh-time' + (canTime && remain < 30000 ? ' danger' : ''), text: canTime ? fmtClock(remain) : '盲操中' }));
+  box.append(el('span', { class: 'mh-sep', text: '·' }));
+  box.append(el('span', { text: `失误 ${st.strikes}/${st.maxStrikes}` }));
+  const solved = (st.bomb && st.bomb.moduleStates ? st.bomb.moduleStates : []).filter((m) => m.status === 'solved').length;
+  box.append(el('span', { class: 'mh-sep', text: '·' }));
+  box.append(el('span', { text: `模块 ${solved}/${(st.bomb && st.bomb.moduleCount) || '?'}` }));
+}

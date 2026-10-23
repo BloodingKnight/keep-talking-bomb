@@ -142,6 +142,37 @@ const denyB = await api('/api/action', { room, playerId: b.playerId, type: 'modu
 if (denyB) ok(`聋桥猴不能操作：${denyB}`);
 else fail('聋桥猴竟然能操作');
 
+// ---------------------------------------------------------------- 回归：只有 3 个人也要能开局
+// （之前 start() 只把 defuser/mute 当操作者、"需要专家"只认 expert/expert2/expert3，
+//   于是三人经典必定报"需要拆弹者/专家"，只有多一个专家才侥幸能开）
+console.log('\n— 回归：刚好 3 人的三人经典能开局 —');
+{
+  const h = await api('/api/create', { name: '三甲', difficulty: 'normal' });
+  const r = h.roomCode;
+  const p2 = await api('/api/join', { room: r, name: '三乙' });
+  const p3 = await api('/api/join', { room: r, name: '三丙' });
+  await api('/api/action', { room: r, playerId: h.playerId, type: 'preset', preset: 'classic3' });
+  const before = await state(r, h.playerId);
+  const roles = before.room.players.map((p) => p.role).sort();
+  if (roles.join(',') === 'blindop,deafsee,muteexp') ok(`3 人各就各位：${roles.join(',')}`);
+  else fail(`3 人预设角色不对：${roles.join(',')}`);
+
+  const err = await api('/api/action', { room: r, playerId: h.playerId, type: 'start' })
+    .then(() => null)
+    .catch((e) => e.message);
+  if (!err) ok('3 人的三人经典能正常开局（不再要求一个"专家"）');
+  else fail(`3 人开局失败：${err}`);
+
+  const after = await state(r, p3.playerId);
+  if (after.room.phase === 'playing') ok('开局后阶段 = playing');
+  else fail(`开局后阶段不对：${after.room.phase}`);
+  if (after.manual && after.manual.sections?.length) ok('哑手册猴拿到了手册（canManual 角色）');
+  else fail('哑手册猴没拿到手册');
+  const blindView = await state(r, h.playerId);
+  if (!blindView.manual) ok('盲操猴没有手册（信息隔离仍然有效）');
+  else fail('盲操猴竟然拿到手册');
+}
+
 console.log(`\n失败 ${failures} 项`);
 // 明确设置退出码即可；不要用 process.exit()，在 Windows 上残留连接会触发 libuv 断言
 process.exitCode = failures ? 1 : 0;

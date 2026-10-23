@@ -230,10 +230,22 @@ export class Game {
     if (room.phase !== 'lobby' && room.phase !== 'ended') throw new Error('游戏已经开始');
     const players = Object.values(room.players);
     if (players.length < 1) throw new Error('至少需要 1 名玩家');
-    if (!players.some((p) => p.role === ROLES.DEFUSER || p.role === ROLES.MUTE)) this.autoAssign(room);
-    if (!Object.values(room.players).some((p) => isExpertRole(p.role))) {
-      throw new Error('至少需要 1 名专家来读手册（或者选择「单人调试」模式）');
+
+    // 「动手」的三个角色都算操作者：拆弹者 / 静默操作员 / 盲操猴（三人经典里就是盲操猴）
+    const OPERATOR_ROLES = [ROLES.DEFUSER, ROLES.MUTE, 'blindop'];
+    const hasOperator = players.some((p) => OPERATOR_ROLES.includes(p.role));
+    if (!hasOperator) this.autoAssign(room);
+
+    // 「能看手册」的判断直接看角色元数据，而不是只认 expert/expert2/expert3 ——
+    // 否则三人经典（盲操猴 + 聋桥猴 + 哑手册猴）会因为"没有专家"而开不了局。
+    const hasReader = Object.values(room.players).some((p) => {
+      const info = roleInfo(p.role);
+      return !!(info && info.canManual);
+    });
+    if (!hasReader) {
+      throw new Error('至少需要 1 名能看手册的玩家：专家 / 盲眼观察员 / 聋桥猴 / 哑手册猴');
     }
+
     const diff = DIFFICULTIES[room.difficulty];
     const manualRows = room.manualRows || diff.manualRows;
     room.manualRows = manualRows;

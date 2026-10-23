@@ -16,6 +16,7 @@ client/index.html
 client/invite.js
 client/manifest.webmanifest
 client/manual.js
+client/panes.js
 client/qr.js
 client/style.css
 client/tutorial.html
@@ -25,6 +26,7 @@ cloudflare/wrangler.toml
 docs/.nojekyll
 docs/icon-192.png
 docs/index.html
+docs/ui-design.md
 functions/README.md
 functions/api/[[path]].js
 lib/bomb.js
@@ -63,6 +65,7 @@ tests/deafsee.mjs
 tests/e2e.mjs
 tests/mobile.mjs
 tests/pages-proxy.mjs
+tests/panes.mjs
 tests/qr.mjs
 tests/rooms.mjs
 tests/run-e2e.mjs

@@ -831,3 +831,120 @@ code { background: #0d131b; border: 1px solid var(--line); border-radius: 4px; p
   main.tutorial h2 { font-size: 17px; }
   main.tutorial pre, main.tutorial code { font-size: 12px; }
 }
+/* ============================================================
+   分块布局（设计见 docs/ui-design.md）
+   · 桌面：四块并排（状态 / 主区 / 信号 / 聊天）
+   · 平板：主区 + 一个可切换侧栏
+   · 手机 / 专注模式：一次一块 + 底部标签栏
+   ============================================================ */
+.pane-tabs { display: none; }
+
+/* ---- 桌面默认：四块并排 ---- */
+.game-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 300px;
+  grid-template-areas: "status main chat" "signals main chat";
+  gap: 14px;
+  align-items: start;
+}
+.game-grid > [data-pane="status"] { grid-area: status; }
+.game-grid > [data-pane="signals"] { grid-area: signals; }
+.game-grid > [data-pane="main"] { grid-area: main; }
+.game-grid > [data-pane="chat"] { grid-area: chat; }
+
+/* ---- 单块模式（手机 / 桌面专注）---- */
+.stage.single .game-grid,
+.stage.single .lobby-grid { display: block; }
+.stage.single [data-pane] { display: none; }
+.stage.single [data-pane].is-active { display: block; }
+.stage.single { padding-bottom: 4px; }
+
+.pane-tabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 6px;
+  background: rgba(13, 19, 27, .96);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+.pane-tabs .pane-tab {
+  flex: 1 1 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  position: relative;
+}
+.pane-tabs .pane-tab .pt-icon { font-size: 18px; line-height: 1; }
+.pane-tabs .pane-tab.is-active {
+  background: #16202c;
+  border-color: var(--accent);
+  color: #ffe9b0;
+}
+.pane-tabs .pane-tab .pt-dot {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pane-tabs .pane-tab .pt-dot.hidden { display: none; }
+
+/* ---- 平板：主区 + 可切换侧栏 ---- */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .stage.twopane .game-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas: "main rail";
+    gap: 12px;
+  }
+  .stage.twopane [data-pane="main"] { grid-area: main; display: block; }
+  .stage.twopane [data-pane]:not([data-pane="main"]) { display: none; grid-area: rail; }
+  .stage.twopane [data-pane]:not([data-pane="main"]).is-active { display: block; }
+  .stage.twopane .pane-tabs { display: flex; }
+  .stage.twopane .pane-tabs [data-tab="main"] { display: none; }
+}
+
+/* ---- 手机：底部标签 + 迷你状态条 ---- */
+@media (max-width: 639px) {
+  .stage.single .pane-tabs { display: flex; position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .stage.single { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+
+/* ---- 常驻迷你状态条 ---- */
+.mini-hud {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-top)) 12px;
+  font-size: 13px;
+  background: rgba(11, 15, 20, .92);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+.mini-hud.hidden { display: none; }
+.mini-hud .mh-time { font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 16px; }
+.mini-hud .mh-time.danger { color: #ff6b6b; }
+.mini-hud .mh-sep { color: #46587a; }
+
+/* 矮屏（横屏手机）把迷你条让给内容 */
+@media (max-height: 480px) {
+  .mini-hud { display: none !important; }
+}
