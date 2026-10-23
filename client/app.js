@@ -629,6 +629,12 @@ function sendChat(inputSel) {
 }
 
 function renderGame() {
+  // 手指正按着的时候不要重建 DOM：否则按钮/剪线元素被替换，
+  // pointerup 落到新元素上、松开事件丢失 —— 表现就是"按住之后松不开、画面像卡住"。
+  if (app.interacting) {
+    app.pendingRender = true;
+    return;
+  }
   const st = app.state;
   const info = st.you.roleInfo;
   $('#room-badge').classList.remove('hidden');
@@ -977,6 +983,19 @@ function bumpUnread(stageId, key) {
 }
 
 function bindPanes() {
+  // 交互保护：手指按着期间不让 renderGame 重建 DOM（见 renderGame 顶部注释）
+  document.addEventListener('pointerdown', () => { app.interacting = true; }, true);
+  const release = () => {
+    if (!app.interacting) return;
+    app.interacting = false;
+    if (app.pendingRender) {
+      app.pendingRender = false;
+      try { renderGame(); } catch { /* 渲染失败不要影响其它逻辑 */ }
+    }
+  };
+  document.addEventListener('pointerup', release, true);
+  document.addEventListener('pointercancel', release, true);
+
   const btn = $('#btn-focus');
   if (btn) {
     btn.addEventListener('click', () => {

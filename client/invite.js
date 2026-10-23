@@ -7,23 +7,27 @@ import { encode, toSvg } from './qr.js';
  *   2. 否则优先用服务端探测到的局域网 IP（手机扫这个才连得上）；
  *   3. 都拿不到就退回当前页面地址（本机自测时是 localhost）。
  *
- * @param {{network?: {urls?: string[], port?: number}, roomCode: string, origin?: string, port?: string|number}} o
+ * `path` 默认 '/'（拆弹游戏），骗子酒馆传 '/liar'。
+ *
+ * @param {{network?: {urls?: string[], port?: number}, roomCode: string, origin?: string, port?: string|number, server?: string, path?: string}} o
  */
 export function inviteUrl(o) {
   const net = (o && o.network) || {};
   const origin = o.origin || '';
   const lan = Array.isArray(net.urls) && net.urls.length ? net.urls[0] : null;
   const port = net.port || o.port || 3210;
+  const page = o.path || '/';
 
   // 静态托管（EdgeOne / Pages）时，页面所在域不是房主机器，
   // 邀请链接必须把房主地址一起带上，否则朋友打开后连不上。
   const serverParam = o.server ? `&server=${encodeURIComponent(o.server)}` : '';
+  const query = `room=${encodeURIComponent(o.roomCode)}${serverParam}`;
 
   if (origin && !isLocalHost(hostOf(origin))) {
-    return `${origin}/?room=${o.roomCode}${serverParam}`;
+    return `${origin}${page}?${query}`;
   }
   const base = lan ? `http://${lan}:${port}` : origin || `http://localhost:${port}`;
-  return `${base}/?room=${o.roomCode}${serverParam}`;
+  return `${base}${page}?${query}`;
 }
 
 function hostOf(url) {

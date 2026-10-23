@@ -49,7 +49,16 @@ if (!up) {
   process.exit(1);
 }
 
-const test = spawn(process.execPath, [path.join(ROOT, 'tests', 'e2e.mjs'), base], { cwd: ROOT, stdio: 'inherit' });
-const code = await new Promise((r) => test.on('exit', r));
+let code = 0;
+for (const [file, args] of [
+  ['tests/liar-engine.mjs', []],
+  ['tests/e2e.mjs', [base]],
+  ['tests/liar.mjs', [base]],
+]) {
+  console.log(`\n=== ${file} ===`);
+  const test = spawn(process.execPath, [path.join(ROOT, file), ...args], { cwd: ROOT, stdio: 'inherit' });
+  const exit = await new Promise((r) => test.on('exit', r));
+  if (exit !== 0) { code = exit; break; }
+}
 server.kill();
 process.exit(code ?? 1);

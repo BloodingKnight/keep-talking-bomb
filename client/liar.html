@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>骗子酒馆 · Liar's Bar</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/liar.css" />
+  <link rel="icon" href="/static/icon-192.png" />
+  <meta name="theme-color" content="#0b0f14" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+</head>
+<body class="liar-body">
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">🎭</span>
+      <div>
+        <div class="brand-title">骗子酒馆</div>
+        <div class="brand-sub">Liar's Bar · 吹牛、质疑、左轮</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span id="room-badge" class="badge hidden"></span>
+      <span id="link-badge" class="badge warn hidden">连接断开，正在重连…</span>
+      <button id="btn-rules" class="ghost small">📜 规则</button>
+      <a class="badge" href="/" style="text-decoration:none">💣 拆弹游戏</a>
+      <button id="btn-leave-top" class="ghost small hidden">退出</button>
+      <button id="btn-close-top" class="ghost small hidden">关闭房间</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================ JOIN ============================ -->
+    <section id="stage-join" class="stage">
+      <div class="panel join-panel liar-join">
+        <div class="liar-hero">
+          <div class="liar-hero-mark">🎭</div>
+          <div>
+            <h1>骗子酒馆</h1>
+            <p class="muted">
+              2~4 个人围着一张桌子，每人 5 张牌、6 个弹巢、1 发实弹。
+              你可以吹牛，但下家可以喊 <strong>Liar!</strong> —— 被抓到说谎的人，对自己扣下扳机。
+              <strong>只有一个人能活着离开。</strong>
+            </p>
+          </div>
+        </div>
+
+        <div class="liar-facts">
+          <span class="fact">👥 2~4 人</span>
+          <span class="fact">🃏 每人 5 张</span>
+          <span class="fact">🎯 Q / K / A</span>
+          <span class="fact">🃏 J 是赖子</span>
+          <span class="fact">🔫 6 个弹巢 1 发实弹</span>
+        </div>
+
+        <label>你的昵称<input id="join-name" maxlength="16" placeholder="例如：阿伟" /></label>
+        <label>房间号（留空则新建一间酒馆）<input id="join-room" maxlength="6" placeholder="例如：7K2M" style="text-transform:uppercase" autocomplete="off" /></label>
+        <div class="row wrap">
+          <button id="btn-join" class="primary big">进入酒馆 / 新建</button>
+          <button id="btn-rules-join" class="ghost">先看看规则</button>
+        </div>
+        <div id="join-error" class="error"></div>
+
+        <div id="room-list-wrap">
+          <h3>还开着的酒馆</h3>
+          <div id="room-list" class="room-list muted">加载中…</div>
+        </div>
+
+        <details class="hint">
+          <summary>一句话规则</summary>
+          <ol>
+            <li>每轮随机一张<strong>目标牌</strong>（Q / K / A），出牌只能"声称"自己出的是它。</li>
+            <li>轮到你：盖着出 1~3 张，或者<strong>质疑上家</strong>。不能过牌。</li>
+            <li>被质疑就亮牌：全是目标牌（J 可当目标牌）→ 质疑者挨一枪；有假牌 → 出牌的人挨一枪。</li>
+            <li>左轮 6 个弹巢、1 发实弹；开到实弹的人出局。最后活着的人赢。</li>
+            <li>有人出完手牌时，只有下家还能质疑；下家放过，他就赢下这一轮。</li>
+          </ol>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============================ LOBBY =========================== -->
+    <section id="stage-lobby" class="stage hidden">
+      <div class="lobby-grid liar-lobby">
+        <div class="panel">
+          <h2>酒客 <span id="lobby-count" class="muted"></span></h2>
+          <p class="muted small">最多 4 人。点一下玩家可以选中，房主能请他出去。</p>
+          <div id="lobby-players" class="players liar-players"></div>
+          <div class="row wrap">
+            <button id="btn-copy-link">复制邀请链接</button>
+            <button id="btn-kick" class="ghost hidden">请选中的人出去</button>
+            <button id="btn-leave" class="ghost">退出房间</button>
+            <button id="btn-close-room" class="ghost hidden">关闭房间</button>
+          </div>
+          <div id="invite-card" class="invite-card hidden">
+            <div id="invite-qr" class="invite-qr"></div>
+            <div class="invite-body">
+              <strong>扫一扫坐上牌桌</strong>
+              <code id="invite-link" class="invite-link"></code>
+              <span class="muted small">手机和这台电脑要连同一个 Wi-Fi；扫不上就把链接发给他。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>房主设置 <span class="muted">（只有房主能改）</span></h2>
+          <label>出牌倒计时
+            <select id="set-turn">
+              <option value="0">不限时（慢慢想）</option>
+              <option value="30">30 秒</option>
+              <option value="45">45 秒</option>
+              <option value="60">60 秒</option>
+            </select>
+          </label>
+          <p class="muted small">倒计时结束会自动出 1 张牌；有人掉线时，15 秒后由系统托管。没有倒计时也可以玩，但有人卡住时大家只能等。</p>
+          <div class="row">
+            <button id="btn-start" class="primary big">开始游戏</button>
+          </div>
+          <div id="lobby-error" class="error"></div>
+          <p class="muted small" id="lobby-hint">至少需要 2 名在线玩家。</p>
+        </div>
+
+        <div class="panel liar-howto">
+          <h2>这局怎么玩</h2>
+          <ol class="rules-short">
+            <li><b>目标牌</b>每轮随机：Q / K / A。出牌时你声称自己出的是它，别人看不到牌面。</li>
+            <li><b>你的回合</b>：选 1~3 张牌出掉，或者质疑上家。不能过牌。</li>
+            <li><b>被质疑</b>就亮牌。全是目标牌（J 赖子可当）→ 质疑者挨枪；否则出牌的人挨枪。</li>
+            <li><b>左轮</b>：每个人 6 个弹巢、1 发实弹，位置开局随机；开到实弹就出局。</li>
+            <li><b>出完手牌</b>：下家可以质疑，也可以放过；放过 = 你赢下这一轮。</li>
+            <li><b>胜负</b>：最后还活着的人赢。上一轮挨枪的人下一轮先出牌。</li>
+          </ol>
+        </div>
+
+        <div class="panel chat-panel" style="grid-column:1/-1">
+          <h2>酒馆聊天</h2>
+          <div id="lobby-chat" class="chat"></div>
+          <form id="lobby-chat-form" class="chat-form">
+            <input id="lobby-chat-input" maxlength="400" placeholder="说点什么…（也可以用来诈对手）" autocomplete="off" />
+            <button class="primary">发送</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ TABLE =========================== -->
+    <section id="stage-table" class="stage hidden">
+      <div class="liar-grid">
+        <div class="panel liar-board">
+          <div class="liar-board-top">
+            <div class="liar-round-box">
+              <span class="muted small">第</span>
+              <b id="round-no">1</b>
+              <span class="muted small">轮</span>
+            </div>
+            <div id="target-card" class="liar-target"></div>
+            <div class="liar-turn-box">
+              <div id="turn-banner" class="liar-turn-banner"></div>
+              <div id="turn-timer" class="liar-turn-timer muted small" data-role="turn-clock"></div>
+            </div>
+          </div>
+
+          <div id="opponents" class="liar-opponents"></div>
+
+          <div class="liar-center">
+            <div id="lastplay" class="liar-lastplay"></div>
+            <div id="reveal" class="liar-reveal hidden"></div>
+            <div id="table-hint" class="liar-table-hint muted small"></div>
+          </div>
+
+          <div class="liar-me">
+            <div id="me-panel"></div>
+          </div>
+
+          <div class="liar-hand-wrap">
+            <div class="liar-hand-head">
+              <span>你的手牌</span>
+              <span id="selection-hint" class="muted small">点牌选中，一次出 1~3 张</span>
+            </div>
+            <div id="my-hand" class="liar-hand"></div>
+          </div>
+
+          <div id="actions" class="liar-actions"></div>
+        </div>
+
+        <aside class="liar-side">
+          <div class="panel">
+            <h2>牌桌记录</h2>
+            <div id="game-log" class="feed liar-log"></div>
+          </div>
+          <div class="panel chat-panel">
+            <h2>聊天</h2>
+            <div id="game-chat" class="chat"></div>
+            <form id="game-chat-form" class="chat-form">
+              <input id="game-chat-input" maxlength="400" placeholder="说点什么…" autocomplete="off" />
+              <button class="primary">发送</button>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============================ END ============================ -->
+    <section id="stage-end" class="stage hidden">
+      <div class="panel end-panel liar-end">
+        <div id="end-banner"></div>
+        <h1 id="end-title"></h1>
+        <div id="end-body"></div>
+        <div class="row wrap">
+          <button id="btn-again" class="primary big">再来一局</button>
+          <button id="btn-leave-end" class="ghost">退出房间</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- 规则弹层 -->
+  <div id="rules-modal" class="modal-mask hidden" role="dialog" aria-modal="true" aria-label="骗子酒馆规则">
+    <div class="modal panel">
+      <div class="modal-head">
+        <h2>🎭 骗子酒馆 · 规则</h2>
+        <button id="btn-rules-close" class="ghost small">关闭</button>
+      </div>
+      <div class="modal-body">
+        <h3>目标</h3>
+        <p>活到最后。每个人都有自己的左轮：6 个弹巢、1 发实弹，实弹位置开局随机固定。</p>
+        <h3>每轮</h3>
+        <ul>
+          <li>牌堆只有 <b>Q×6、K×6、A×6、J×2</b>，每人摸 5 张。</li>
+          <li>随机翻出一张<b>目标牌</b>（Q / K / A），本轮所有人出牌时都只能声称自己出的是目标牌。</li>
+          <li><b>J 是赖子</b>：它永远算目标牌，可以放心出，也可以混在假牌里唬人。</li>
+          <li>上家出完牌后轮到你：要么盖着出 1~3 张（声称是目标牌），要么质疑上家。不能过牌。</li>
+          <li>被质疑就亮出上家刚出的牌：
+            <ul>
+              <li>全是目标牌 / 赖子 → <b>质疑失败</b>，质疑者对自己开一枪。</li>
+              <li>有任意一张假牌 → <b>抓到骗子</b>，出牌的人对自己开一枪。</li>
+            </ul>
+          </li>
+          <li>有人出完手牌时，<b>只有他的下家</b>还能质疑；下家放过，他就赢下这一轮（没人挨枪）。</li>
+          <li>一轮结束（挨枪或放过）后，所有人重新摸 5 张、换一张目标牌。上一轮的输家先出。</li>
+        </ul>
+        <h3>左轮</h3>
+        <p>每次挨一枪，弹巢前进一格。头顶的 <b>x/6</b> 就是已经扣过几次扳机；开到实弹就出局。被抬出去的人还能看牌、聊天，但不能出牌。</p>
+        <h3>小技巧</h3>
+        <ul>
+          <li>手里目标牌多的时候可以一次出 2~3 张真牌，把压力推给下家。</li>
+          <li>只剩 1 张牌时，如果你出的不是目标牌，下家质疑你就必挨一枪 —— 留一张真牌收尾更稳。</li>
+          <li>赖子是最安全的"真牌"，别把它当假牌浪费了。</li>
+          <li>别人一次出 3 张时，未必是假牌；别人出 1 张时，也未必是真牌。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/liar.js"></script>
+</body>
+</html>

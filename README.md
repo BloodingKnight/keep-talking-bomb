@@ -3,6 +3,10 @@
 一个**本地多人、信息不对称**的合作拆弹游戏：一个人只能看到炸弹，其他人只能看到手册，
 剩下的一切都靠你们自己当面沟通。
 
+> 🎭 同一个服务里还带了一个 **骗子酒馆（Liar's Bar）**：2~4 人吹牛、质疑、俄罗斯轮盘，
+> 最后只有一个人能活着离开。打开 `/liar` 就能玩，规则和实现见下方
+> [「骗子酒馆」](#骗子酒馆liars-bar) 一节。
+
 - 零第三方依赖，只用 Node.js 自带模块（HTTP + SSE）实现
 - 同一台电脑或同一个局域网，每人用自己的手机 / 平板 / 电脑开一个浏览器标签加入
 - 不提供语音/视频：语音靠你们自己（当面说、开语音），不能说话的玩家用游戏内**文字频道**
@@ -103,6 +107,71 @@ node server/server.js 8080       # 也可以指定端口
 失败的局只保留「已拆模块 × 100」的基础分。
 
 ---
+
+## 骗子酒馆（Liar's Bar）
+
+打包在同一个服务里的第二个游戏：**2~4 人、吹牛、质疑、左轮**。
+和拆弹一样，所有人用手机 / 平板 / 电脑打开浏览器加入，服务端权威、支持断线重连。
+
+打开方式：主界面右上角「🎭 骗子酒馆」，或直接访问：
+
+```
+http://localhost:3210/liar
+```
+
+### 规则（经典骗子纸牌）
+
+| 项目 | 规则 |
+|---|---|
+| 人数 | 2~4 人（坐满 4 人后第 5 个人会被拒绝） |
+| 牌堆 | **Q×6、K×6、A×6、J×2**，每轮每人摸 5 张 |
+| 目标牌 | 每轮从 Q / K / A 随机一张；所有人出牌时只能「声称」自己出的是它 |
+| 赖子 | **J 是赖子**，永远算目标牌，可以放心出，也可以混在假牌里 |
+| 出牌 | 轮到你时盖着出 **1~3 张**，或者**质疑上家**；不能过牌 |
+| 质疑 | 亮出上家刚出的牌：全是目标牌 / 赖子 → **质疑者**对自己开一枪；有假牌 → **出牌的人**开一枪 |
+| 左轮 | 每人 6 个弹巢、1 发实弹，位置开局随机固定；开到实弹就出局（显示 `x/6` 已扣扳机次数） |
+| 出完手牌 | 只有**下家**还能质疑；下家选择放过 → 出完牌的人赢下这一轮，没人挨枪 |
+| 轮次 | 一轮结束（挨枪或放过）后所有人重摸 5 张、换目标牌；上一轮输家先出 |
+| 胜负 | 最后活下来的人赢；出局的人还能看牌、聊天，但不能出牌 |
+
+### 界面与操作
+
+- **准备区**：房主可以设「出牌倒计时」（不限时 / 30 / 45 / 60 秒），复制邀请链接或扫二维码；
+  2~4 人，至少 2 名在线玩家才能开始。
+- **牌桌**：中间是目标牌、上家声明、亮牌结果；上方是对手（手牌只显示数量、左轮弹巢、是否轮到他）；
+  下方是你的手牌（点牌选中，次数 1~3 张；键盘数字键 `1~5` 也能选，`Esc` 清空）。
+- **亮牌**：质疑后停留约 4.6 秒，逐张展示上家出的牌（✓ 目标牌 / ✗ 假牌）、谁挨枪、空响还是出局，
+  然后自动进入下一轮。
+- **托管**：开了倒计时就按倒计时自动出 1 张；有人掉线时，15 秒后由系统托管（自动出牌或放过）。
+- **聊天**：酒馆内置文字频道，活人死人都能发言（也可以用来诈对手）。
+- **再来一局**：房主在结算页点「再来一局」回到准备区，换副牌重开。
+
+> 服务端只把「你该看到的那一份」发给你：别人的手牌只有数量、活人的实弹位置永远不下发；
+> 亮牌也不是客户端算的，是服务端判定的。浏览器改前端改不出别人的牌。
+
+### 与拆弹游戏的关系
+
+- 两个游戏共用同一个 HTTP 服务、同一套 CORS / SSE / 邀请链接 / 二维码 / 手机适配；
+- 但**房间、API、页面都是分开的**：`/` 是拆弹，`/liar` 是骗子酒馆，房间号互不影响；
+- 两边都零第三方依赖，`node server/server.js` 一个进程就能同时开两种局。
+
+### 骗子酒馆的 HTTP 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/liar` | 骗子酒馆页面 |
+| GET | `/api/liar/rooms` | 酒馆列表 + 规则元数据 |
+| POST | `/api/liar/create` | 新建酒馆并坐下 → `{roomCode, playerId}` |
+| POST | `/api/liar/join` | 加入 / 重连（`{room,name,playerId?}`） |
+| GET | `/api/liar/state?room=&player=` | 拉取本座位视图（轮询兜底） |
+| GET | `/api/liar/events?room=&player=` | SSE 实时推送本座位视图 |
+| POST | `/api/liar/action` | `configure` / `start` / `play` / `challenge` / `passFinal` / `restart` / `chat` / `ping` / `leave` / `closeRoom` / `kick` |
+
+以 `--test` 启动时额外开放 `action.type:'debug'`（摆牌、改目标牌、改实弹位置、跳过亮牌动画），
+只用于自动化测试，正常启动不存在。
+
+---
+
 
 ## 模块与手册
 
@@ -297,6 +366,7 @@ node tests/client.mjs           # 客户端动画（无需浏览器，用最小 
 node tests/blind.mjs            # 盲操猴视野：18 个模块都不许泄漏颜色/数字/文字
 node tests/bugs.mjs             # 历次 bug 的回归（计时器 / 闪光 / 迷宫方向 / 电报）
 node tests/admin-ui.mjs         # 管理面板交互（无需浏览器）
+node tests/liar-engine.mjs      # 骗子酒馆规则引擎（发牌 / 质疑 / 左轮 / 轮次 / 托管，无需服务器）
 
 # 端到端测试：先起一个测试服，再在另一个终端跑客户端
 node server/server.js 3388 --test
@@ -305,6 +375,7 @@ node tests/rooms.mjs http://127.0.0.1:3388
 node tests/threemonkeys.mjs http://127.0.0.1:3388
 node tests/bench.mjs http://127.0.0.1:3388
 node tests/deafsee.mjs http://127.0.0.1:3388   # 聋桥猴：整颗炸弹 + 队友幽灵光标
+node tests/liar.mjs http://127.0.0.1:3388      # 骗子酒馆：建房 / 质疑 / 左轮 / 终局 / SSE / 踢人
 node tests/tutorial.mjs http://127.0.0.1:3388 secret
 BOMB_ADMIN_TOKEN=secret node server/server.js 3389 --test   # 管理入口测试要固定令牌
 node tests/admin.mjs http://127.0.0.1:3389 secret
@@ -312,6 +383,8 @@ node tests/admin.mjs http://127.0.0.1:3389 secret
 # 也可以一键跑（会自动挑一个空闲端口起服；需要当前环境允许创建子进程）
 node tests/run-e2e.mjs
 ```
+
+> `run-e2e.mjs` 现在会依次跑：骗子酒馆引擎单测 → 拆弹端到端 → 骗子酒馆端到端。
 
 > 如果所在环境禁止程序创建子进程（例如某些沙箱），`run-e2e.mjs` 会启动失败 —— 用上面两步的
 > 手动方式即可。
@@ -551,9 +624,11 @@ Dockerfile           公网部署用的镜像（只带运行需要的文件）
 tools/build-single.mjs    打单文件 exe（Node SEA + postject 注入）
 tools/build-portable.mjs  打 Windows 绿色版（内置 node.exe + play.cmd）
 tools/lib-zip.mjs         极简 zip 写入（两个构建脚本共用，只依赖 Node 自带 zlib）
-server/server.js     HTTP + SSE 服务、路由、广播、测试后门
-server/room.js       会话/房间管理：加入、座位、角色、阶段、失误、结算
+server/server.js     HTTP + SSE 服务、路由、广播、测试后门（拆弹 + 骗子酒馆共用）
+server/room.js       拆弹的会话/房间管理：加入、座位、角色、阶段、失误、结算
+server/liar.js       骗子酒馆的服务端实例（房间号 / 玩家 id 用加密随机数）
 lib/bomb.js          炸弹生成（外壳信息 + 模块选取 + 难度权重）与计分
+lib/liars.js         骗子酒馆规则引擎：发牌 / 出牌 / 质疑 / 左轮 / 轮次 / 托管（纯逻辑，可单测）
 lib/modules.js       9 个模块：状态、规则表、判定逻辑（等级化）
 lib/modules-extra.js 4 个进阶模块：齿轮 / 天平 / 解码 / 三色电报
 lib/modules-more.js  5 个补充模块：复杂线路 / 电容 / 保险柜 / 字母键盘 / 双序列闪光
@@ -564,6 +639,9 @@ client/index.html    页面骨架
 client/app.js        会话接线、准备区、HUD、文字频道、结算
 client/bomb.js       拆弹者视角的模块控件（含闪烁/摩斯动画、盲操猴的白色轮廓渲染、鼠标上报）
 client/manual.js     专家视角的手册（表格、迷宫图、外壳信息、搜索）
+client/liar.html     骗子酒馆页面骨架（入口 / 准备区 / 牌桌 / 结算 / 规则弹层）
+client/liar.js       骗子酒馆客户端：座位、手牌、质疑、亮牌动画、左轮、聊天
+client/liar.css      骗子酒馆的牌桌皮肤
 client/admin.html    管理入口页面骨架
 client/admin.js      管理入口：出题与视角（验题 + 角色自选）/ 房间监控 / 服务器状态
 client/tutorial.html 新手指南（纯静态说明页）
@@ -574,6 +652,8 @@ tools/check-maze.mjs    迷宫墙数据一致性检查
 tools/probe-roles.mjs   角色座位/视图的手工排查脚本
 tests/selftest.mjs   生成 + 可解性自检
 tests/e2e.mjs        多客户端端到端测试
+tests/liar-engine.mjs 骗子酒馆规则引擎单测
+tests/liar.mjs       骗子酒馆 HTTP / SSE 端到端测试
 tests/rooms.mjs      退出 / 关闭 / 踢人 / 房主转移 / 房间列表 测试
 tests/threemonkeys.mjs 三人经典配置（盲操/聋桥/哑手册）与手势信号测试
 tests/tutorial.mjs   教程页内容 与 管理端"角色自选"测试

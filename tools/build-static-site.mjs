@@ -25,13 +25,14 @@ const copy = (from, to) => {
 // 页面（放在根目录，因为 index.html 里引用的是 /static/...）
 copy(path.join(CLIENT, 'index.html'), path.join(OUT, 'index.html'));
 copy(path.join(CLIENT, 'tutorial.html'), path.join(OUT, 'tutorial.html'));
+copy(path.join(CLIENT, 'liar.html'), path.join(OUT, 'liar.html'));
 
 // 资源：全部进 static/
 let n = 0;
 let bytes = 0;
 for (const ent of fs.readdirSync(CLIENT, { withFileTypes: true })) {
   if (ent.isDirectory()) continue;
-  if (ent.name === 'index.html' || ent.name === 'tutorial.html') continue;
+  if (ent.name === 'index.html' || ent.name === 'tutorial.html' || ent.name === 'liar.html') continue;
   if (ent.name === 'admin.html' || ent.name === 'admin.js') continue; // 管理端只在有服务端时可用
   const src = path.join(CLIENT, ent.name);
   copy(src, path.join(OUT, 'static', ent.name));
@@ -39,9 +40,11 @@ for (const ent of fs.readdirSync(CLIENT, { withFileTypes: true })) {
   bytes += fs.statSync(src).size;
 }
 
-// 让静态托管也能处理 /tutorial（没有扩展名的路径）
-fs.mkdirSync(path.join(OUT, 'tutorial'), { recursive: true });
-copy(path.join(CLIENT, 'tutorial.html'), path.join(OUT, 'tutorial', 'index.html'));
+// 让静态托管也能处理 /tutorial、/liar（没有扩展名的路径）
+for (const [dir, file] of [['tutorial', 'tutorial.html'], ['liar', 'liar.html']]) {
+  fs.mkdirSync(path.join(OUT, dir), { recursive: true });
+  copy(path.join(CLIENT, file), path.join(OUT, dir, 'index.html'));
+}
 
 // 一份给 EdgeOne / Pages 的说明
 fs.writeFileSync(
@@ -59,5 +62,5 @@ fs.writeFileSync(
   'utf8',
 );
 
-console.log(`[site] ${path.relative(ROOT, OUT)}/index.html + ${n} 个静态资源, ${(bytes / 1024).toFixed(0)} KB`);
+console.log(`[site] ${path.relative(ROOT, OUT)}/index.html + liar.html + ${n} 个静态资源, ${(bytes / 1024).toFixed(0)} KB`);
 console.log('[site] 部署：输出目录填 site，构建命令填 node tools/build-static-site.mjs');

@@ -10,6 +10,7 @@
     "dev": "node server/server.js 3210",
     "test": "node tests/selftest.mjs 40",
     "test:e2e": "node tests/run-e2e.mjs",
+    "test:liar": "node tests/liar-engine.mjs",
     "test:qr": "node tests/qr.mjs",
     "manual:text": "node tools/extract-pdf.mjs",
     "build:portable": "node tools/build-portable.mjs",

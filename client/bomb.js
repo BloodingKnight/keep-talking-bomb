@@ -335,6 +335,9 @@ function renderButton(body, mod, send, ctx) {
     setTimeout(() => send({ type: 'release', benchMs: remainingOf(benchDeadline) }), Math.max(0, 220 - held));
   };
   btn.addEventListener('pointerup', up);
+  // 手机上长按/滑动会触发 pointercancel（而不是 pointerup），不处理就会永远卡在"按住"
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
   btn.addEventListener('pointerleave', () => { if (btn.dataset.down) up(); });
 
   body.append(btn, strip);
@@ -495,10 +498,30 @@ function telegraph(body, mod, send, opts = {}) {
   ]);
   body.append(target);
 
+  // 三色电报：灯带颜色是要玩家自己选的（选错会记失误），所以这里做成可点的选择器。
+  // 之前的实现只是标签，手机上点它没反应 —— 看起来像"点不动"。
+  let chosenColor = null;
+  const channelBtns = [];
+  const syncChannels = () => {
+    for (const b of channelBtns) b.classList.toggle('selected', b.dataset.ch === chosenColor);
+  };
   if (withColor) {
     const rows = el('div', { class: 'signal-channels' });
-    for (const strip of st.strips || []) rows.append(el('span', { class: 'sig-ch' }, [el('span', { text: `${strip.ch}灯` })]));
-    body.append(rows);
+    for (const strip of st.strips || []) {
+      const b = el('button', {
+        class: 'sig-ch',
+        dataset: { ch: strip.ch },
+        text: `${strip.ch}灯`,
+        onClick: () => {
+          chosenColor = chosenColor === strip.ch ? null : strip.ch;
+          syncChannels();
+          if (ctx && ctx.flash) ctx.flash(b);
+        },
+      });
+      channelBtns.push(b);
+      rows.append(b);
+    }
+    body.append(rows, el('div', { class: 'muted small', text: '先选这条字母走哪个灯带，再敲下面的 · — 发电码' }));
   }
 
   // 已敲入的点横
@@ -524,7 +547,7 @@ function telegraph(body, mod, send, opts = {}) {
 
   body.append(el('div', { class: 'tele-row' }, [
     el('button', { class: 'small', text: '清空这一串', onClick: () => send({ type: 'clearKey' }) }),
-    el('button', { class: 'primary', text: '发送这个字母', onClick: () => send({ type: 'sendLetter', marks: st.entered || [] }) }),
+    el('button', { class: 'primary', text: '发送这个字母', onClick: () => send({ type: 'sendLetter', marks: st.entered || [], color: chosenColor || undefined }) }),
     total > 1 ? el('button', { class: 'small ghost', text: '换一个单词', onClick: () => send({ type: 'skipWord' }) }) : null,
   ]));
 

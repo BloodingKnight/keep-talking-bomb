@@ -948,3 +948,41 @@ code { background: #0d131b; border: 1px solid var(--line); border-radius: 4px; p
 @media (max-height: 480px) {
   .mini-hud { display: none !important; }
 }
+/* ============================================================
+   触屏交互：按下要有可见反馈，且不要触发文字选择/长按菜单
+   （手机上"按住按钮"和"点灯带"出问题，多半就是这两件事）
+   ============================================================ */
+.big-button,
+.module button,
+.tele-key,
+.lamp,
+.strip-bar,
+.tape,
+.dpad button {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.big-button:active,
+.big-button.holding {
+  transform: scale(.985);
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 3px rgba(255, 176, 32, .35) inset;
+}
+.module button:active,
+.tele-key:active,
+.dpad button:active {
+  filter: brightness(1.25);
+  transform: translateY(1px);
+}
+.strip-bar:active { filter: brightness(1.1); }
+/* 三色电报：灯带选择器（可点，选中高亮） */
+.signal-channels { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
+.sig-ch {
+  min-height: 44px; padding: 0 14px; border-radius: 10px; font-size: 15px; font-weight: 700;
+  border: 1px solid var(--line); background: #0d131b; color: var(--text);
+}
+.sig-ch:active { filter: brightness(1.3); }
+.sig-ch.selected { border-color: var(--accent); color: #241a05; background: linear-gradient(180deg, #ffc266, #f0a33a); }

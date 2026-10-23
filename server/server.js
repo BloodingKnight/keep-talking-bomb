@@ -16,9 +16,11 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Game } from './room.js';
+import { liarGame } from './liar.js';
 import { playerState, roomSummary, buildManual, moduleStateForBomb } from '../lib/view.js';
 import { MODULES } from '../lib/modules.js';
 import { makeBomb } from '../lib/bomb.js';
+import { LIAR_RULES, LIAR_TURN_SECONDS } from '../lib/liars.js';
 import { DIFFICULTIES, DIFFICULTY_ORDER, ROLE_INFO, EXTRA_EXPERT_ROLES, ROLES, PORTS, ROLE_PRESETS } from '../lib/vocab.js';
 
 // 单文件 exe 是被 esbuild 打成 CJS 的，那里没有 import.meta.url，所以退回 __dirname；
@@ -34,6 +36,7 @@ const CLIENT_DIR = path.join(ROOT, 'client');
 
 const game = new Game();
 const streams = new Map(); // playerId -> { res, roomCode }
+const liarStreams = new Map(); // playerId -> { res, roomCode }（骗子酒馆的 SSE）
 const previews = new Map(); // playerId -> { bomb } 房主测试台的临时题目
 const TEST_MODE = process.argv.includes('--test') || process.env.BOMB_TEST === '1';
 const SERVER_STARTED_AT = Date.now();
@@ -357,6 +360,40 @@ function pushTo(playerId, room) {
   if (stream && stream.roomCode === room.code) writeEvent(stream.res, playerId, room);
 }
 
+// ------------------------------------------------------- 骗子酒馆的广播
+function liarBroadcast(room) {
+  room.rev = (room.rev || 0) + 1;
+  room.lastActivity = Date.now();
+  for (const p of Object.values(room.players)) {
+    const stream = liarStreams.get(p.id);
+    if (!stream || stream.roomCode !== room.code) continue;
+    liarWriteEvent(stream.res, room, p.id);
+  }
+}
+
+function liarWriteEvent(res, room, playerId) {
+  const player = room.players[playerId];
+  if (!player) return;
+  try {
+    res.write(`data: ${JSON.stringify({ rev: room.rev || 0, state: liarGame.view(room, player) })}\n\n`);
+  } catch { /* stream closed */ }
+}
+
+function liarPushTo(playerId, room) {
+  const stream = liarStreams.get(playerId);
+  if (stream && stream.roomCode === room.code) liarWriteEvent(stream.res, room, playerId);
+}
+
+function notifyLiarClosed(playerId, roomCode, reason) {
+  const stream = liarStreams.get(playerId);
+  if (!stream || stream.roomCode !== roomCode) return;
+  try {
+    stream.res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
+    stream.res.end();
+  } catch { /* already gone */ }
+  liarStreams.delete(playerId);
+}
+
 // ---------------------------------------------------------------------- API
 const routes = {
   // ------------------------------------------------------------ 管理入口 API
@@ -418,6 +455,145 @@ const routes = {
       return send(res, 200, { ok: true });
     }
     throw new Error('未知操作');
+  },
+
+  // ------------------------------------------------------------ 骗子酒馆 API
+  async 'GET /api/liar/rooms'(req, res) {
+    send(res, 200, {
+      rooms: liarGame.listRooms(),
+      rules: LIAR_RULES,
+      turnSeconds: LIAR_TURN_SECONDS,
+      network: { port: PORT, urls: LAN_IPS },
+    });
+  },
+
+  async 'POST /api/liar/create'(req, res, body) {
+    let room;
+    try {
+      room = liarGame.createRoom({
+        hostName: body.name || '房主',
+        turnSeconds: body.turnSeconds,
+        seed: TEST_MODE ? body.seed : undefined,
+      });
+      const player = liarGame.joinRoom(room, { name: body.name, playerId: body.playerId });
+      send(res, 200, { roomCode: room.code, playerId: player.id });
+    } catch (e) {
+      if (room) liarGame.deleteRoom(room.code);
+      send(res, 400, { error: e.message });
+    }
+  },
+
+  async 'POST /api/liar/join'(req, res, body) {
+    const room = liarGame.getRoom(body.room);
+    if (!room) return send(res, 404, { error: '没有这个房间（酒馆可能已经关门了）' });
+    let player;
+    try {
+      player = liarGame.joinRoom(room, { name: body.name, playerId: body.playerId });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+    liarBroadcast(room);
+    send(res, 200, { roomCode: room.code, playerId: player.id, name: player.name });
+  },
+
+  async 'GET /api/liar/state'(req, res, url) {
+    const room = liarGame.getRoom(url.searchParams.get('room'));
+    if (!room) return send(res, 404, { error: '没有这个房间' });
+    const player = room.players[url.searchParams.get('player')];
+    if (!player) return send(res, 404, { error: '你不在这个房间里' });
+    send(res, 200, { rev: room.rev || 0, state: liarGame.view(room, player) });
+  },
+
+  async 'GET /api/liar/events'(req, res, url) {
+    const room = liarGame.getRoom(url.searchParams.get('room'));
+    const playerId = url.searchParams.get('player');
+    if (!room) return send(res, 404, { error: '没有这个房间' });
+    const player = room.players[playerId];
+    if (!player) return send(res, 404, { error: '你不在这个房间里' });
+
+    res.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    });
+    res.write(': connected\n\n');
+    const prev = liarStreams.get(playerId);
+    if (prev) { try { prev.res.end(); } catch { /* ignore */ } }
+    liarStreams.set(playerId, { res, roomCode: room.code });
+    player.connected = true;
+    player.lastSeen = Date.now();
+    liarWriteEvent(res, room, playerId);
+    liarBroadcast(room);
+
+    const ka = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* closed */ } }, 15000);
+    req.on('close', () => {
+      clearInterval(ka);
+      const cur = liarStreams.get(playerId);
+      if (cur && cur.res === res) liarStreams.delete(playerId);
+    });
+  },
+
+  async 'POST /api/liar/action'(req, res, body) {
+    const room = liarGame.getRoom(body.room);
+    if (!room) return send(res, 404, { error: '没有这个房间' });
+    const player = room.players[body.playerId];
+    if (!player) return send(res, 404, { error: '你不在这个房间里' });
+    player.lastSeen = Date.now();
+    player.connected = true;
+    const type = body.type;
+    const isHost = room.hostId === player.id;
+    let result = {};
+    try {
+      if (type === 'configure') {
+        if (!isHost) throw new Error('只有房主可以修改设置');
+        liarGame.configure(room, { turnSeconds: body.turnSeconds });
+      } else if (type === 'start') {
+        if (!isHost) throw new Error('只有房主可以开始游戏');
+        liarGame.start(room);
+      } else if (type === 'play') {
+        liarGame.play(room, player, body.cards);
+      } else if (type === 'challenge') {
+        liarGame.challenge(room, player);
+      } else if (type === 'passFinal') {
+        liarGame.passFinal(room, player);
+      } else if (type === 'restart') {
+        if (!isHost) throw new Error('只有房主可以开下一局');
+        liarGame.restart(room);
+      } else if (type === 'chat') {
+        liarGame.chat(room, player, body.text);
+      } else if (type === 'ping') {
+        // presence only
+      } else if (type === 'debug') {
+        if (!TEST_MODE) throw new Error('未知操作');
+        result = { debug: liarGame.debug({ ...body, room: room.code }) };
+      } else if (type === 'leave') {
+        const info = liarGame.removePlayer(room, player.id);
+        if (info.roomDeleted) return send(res, 200, { ok: true, left: true, roomDeleted: true });
+        liarBroadcast(room);
+        notifyLiarClosed(player.id, room.code, 'left');
+        return send(res, 200, { ok: true, left: true });
+      } else if (type === 'closeRoom') {
+        if (!isHost) throw new Error('只有房主可以关闭房间');
+        for (const p of Object.values(room.players)) notifyLiarClosed(p.id, room.code, 'closed');
+        liarGame.closeRoom(room, player);
+        return send(res, 200, { ok: true, closed: true });
+      } else if (type === 'kick') {
+        if (!isHost) throw new Error('只有房主可以请人出去');
+        if (room.phase !== 'lobby') throw new Error('游戏进行中不能踢人');
+        const target = room.players[body.targetId];
+        if (!target) throw new Error('玩家不存在');
+        if (target.id === player.id) throw new Error('不能踢自己');
+        notifyLiarClosed(target.id, room.code, 'kicked');
+        liarGame.removePlayer(room, target.id);
+      } else {
+        throw new Error('未知操作');
+      }
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+    liarBroadcast(room);
+    send(res, 200, { ok: true, ...result });
   },
 
   async 'GET /api/rooms'(req, res) {
@@ -625,6 +801,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/tutorial' || url.pathname === '/tutorial/' || url.pathname === '/tutorial.html') {
       return serveStatic(res, path.join(CLIENT_DIR, 'tutorial.html'));
     }
+    if (url.pathname === '/liar' || url.pathname === '/liar/' || url.pathname === '/liar.html') {
+      return serveStatic(res, path.join(CLIENT_DIR, 'liar.html'));
+    }
     if (url.pathname === '/' || url.pathname === '/index.html') return serveStatic(res, path.join(CLIENT_DIR, 'index.html'));
     if (url.pathname.startsWith('/static/')) return serveStatic(res, path.join(CLIENT_DIR, url.pathname.slice('/static/'.length)));
     return serveStatic(res, path.join(CLIENT_DIR, url.pathname.replace(/^\//, '')));
@@ -638,7 +817,12 @@ setInterval(() => {
     const changed = game.tick(room);
     if (changed) broadcast(room);
   }
+  for (const room of liarGame.rooms.values()) {
+    const changed = liarGame.tick(room);
+    if (changed) liarBroadcast(room);
+  }
   game.sweep();
+  liarGame.sweep();
 }, 250);
 
 // heartbeat so clients' countdown stays in sync and disconnects are noticed
@@ -651,6 +835,14 @@ setInterval(() => {
       for (const p of Object.values(room.players)) pushTo(p.id, room);
     } else if (room.phase === 'lobby') {
       broadcast(room);
+    }
+  }
+  for (const room of liarGame.rooms.values()) {
+    if (room.phase === 'playing' || room.phase === 'reveal') {
+      room.rev = (room.rev || 0) + 1;
+      for (const p of Object.values(room.players)) liarPushTo(p.id, room);
+    } else if (room.phase === 'lobby') {
+      liarBroadcast(room);
     }
   }
 }, 1000);

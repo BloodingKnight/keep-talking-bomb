@@ -14,6 +14,9 @@ client/icon-192.png
 client/icon-512.png
 client/index.html
 client/invite.js
+client/liar.css
+client/liar.html
+client/liar.js
 client/manifest.webmanifest
 client/manual.js
 client/panes.js
@@ -21,6 +24,7 @@ client/qr.js
 client/style.css
 client/tutorial.html
 cloudflare/src/index.js
+cloudflare/src/liar-do.js
 cloudflare/src/room-do.js
 cloudflare/wrangler.toml
 docs/.nojekyll
@@ -30,6 +34,7 @@ docs/ui-design.md
 functions/README.md
 functions/api/[[path]].js
 lib/bomb.js
+lib/liars.js
 lib/modules-extra.js
 lib/modules-more.js
 lib/modules.js
@@ -37,6 +42,7 @@ lib/rng.js
 lib/view.js
 lib/vocab.js
 package.json
+server/liar.js
 server/room.js
 server/server.js
 src-tauri/Cargo.toml
@@ -59,10 +65,13 @@ tests/bench.mjs
 tests/blind.mjs
 tests/bugs.mjs
 tests/client.mjs
+tests/cloudflare-liar.mjs
 tests/cloudflare.mjs
 tests/cors.mjs
 tests/deafsee.mjs
 tests/e2e.mjs
+tests/liar-engine.mjs
+tests/liar.mjs
 tests/mobile.mjs
 tests/pages-proxy.mjs
 tests/panes.mjs
