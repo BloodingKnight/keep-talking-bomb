@@ -55,6 +55,38 @@ console.log('\n— 标签顺序（按角色最缺的情报排）—');
   else fail('大厅默认块不是 roles');
 }
 
+console.log('\n— 动手座位判定（大厅"开始"按钮的门槛）—');
+{
+  const ops = ['defuser', 'mute', 'blindop'];
+  let bad = 0;
+  for (const r of ops) {
+    if (!P.isOperatorRole(r)) {
+      bad++;
+      console.log(`     ${r} 应该算动手角色`);
+    }
+  }
+  if (!bad) ok(`动手角色齐了：${ops.join(' / ')}`);
+  else fail('动手角色判定有误');
+
+  for (const r of ['deafsee', 'expert', 'blind', 'muteexp', 'expert2']) {
+    if (P.isOperatorRole(r)) fail(`${r} 不该算动手角色（否则大厅会误放行）`);
+  }
+  ok('聋桥猴 / 专家 / 盲眼 / 哑手册猴 都不算动手角色');
+
+  if (P.isManualRole('muteexp') && P.isManualRole('expert') && !P.isManualRole('blindop')) {
+    ok('手册角色判定正确（哑手册猴有手册，盲操猴没有）');
+  } else {
+    fail('手册角色判定不对');
+  }
+
+  // 三人经典：盲操猴动手 + 哑手册猴读手册 → 大厅必须允许开始
+  const players = [{ role: 'blindop' }, { role: 'deafsee' }, { role: 'muteexp' }];
+  const hasOp = players.some((p) => P.isOperatorRole(p.role));
+  const hasManual = players.some((p) => p.role && !P.isOperatorRole(p.role));
+  if (hasOp && hasManual) ok('三人经典（正好 3 人）满足开局条件，不会再报"需要拆弹者"');
+  else fail('三人经典仍然不满足开局条件');
+}
+
 console.log('\n— 断点 —');
 {
   const cases = [

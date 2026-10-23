@@ -3,7 +3,7 @@
 import { el, clear, $, fmtClock, toast } from './dom.js';
 import { renderBomb, renderPreviewModule } from './bomb.js';
 import { renderManual } from './manual.js';
-import { panesForRole, defaultPaneForRole, LOBBY_PANES, defaultLobbyPane, layoutForWidth, paneByIndex } from './panes.js';
+import { isOperatorRole, panesForRole, defaultPaneForRole, LOBBY_PANES, defaultLobbyPane, layoutForWidth, paneByIndex } from './panes.js';
 import { inviteUrl, inviteQrSvg } from './invite.js';
 
 const ROLE_FALLBACK = {
@@ -573,10 +573,11 @@ function renderLobby() {
   const diff = (app.catalog.difficulties || []).find((d) => d.id === room.difficulty);
   $('#lobby-modules').textContent = st.bomb ? '' : (diff ? `这一局将生成 ${room.moduleCount || `${diff.modules[0]}~${diff.modules[1]}`} 个模块，倒计时 ${diff.timeSec} 秒。` : '');
 
-  const hasDefuser = room.players.some((p) => p.role === 'defuser' || p.role === 'mute');
-  const hasExpert = room.players.some((p) => p.role && p.role !== 'defuser' && p.role !== 'mute');
+  // 动手座位有三个角色：拆弹者 / 静默操作员 / 盲操猴（三人经典里就是盲操猴）
+  const hasDefuser = room.players.some((p) => isOperatorRole(p.role));
+  const hasExpert = room.players.some((p) => p.role && !isOperatorRole(p.role));
   $('#btn-start').disabled = !(isHost && hasDefuser && hasExpert);
-  $('#lobby-error').textContent = !hasDefuser ? '至少需要一名拆弹者或静默操作员。' : !hasExpert ? '至少需要一名专家来读手册。' : !isHost ? '等待房主开始游戏。' : '';
+  $('#lobby-error').textContent = !hasDefuser ? '至少需要一名动手角色：拆弹者 / 静默操作员 / 盲操猴。' : !hasExpert ? '至少需要一名能看手册的角色：专家 / 盲眼观察员 / 聋桥猴 / 哑手册猴。' : !isHost ? '等待房主开始游戏。' : '';
 
   renderChat($('#lobby-chat'));
 }

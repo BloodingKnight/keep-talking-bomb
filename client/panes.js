@@ -5,14 +5,28 @@
 //   · 角色只决定两件事：主区里放什么（炸弹 / 轮廓 / 手册）、标签顺序
 //   · 屏幕宽度决定"同时能看几块"：手机 1 块、平板 2 块、电脑 4 块；电脑可切专注模式变 1 块
 
-const OPERATOR_ROLES = new Set(['defuser', 'mute', 'blindop', 'deafsee']);
+// 「动手座位」只有三个：拆弹者 / 静默操作员 / 盲操猴。和 server/room.js 的 start() 校验必须一致。
+const OPERATOR_ROLES = new Set(['defuser', 'mute', 'blindop']);
+// 主区能看到"炸弹"的角色：动手的三个 + 聋桥猴（他看得见整颗炸弹，但不能操作）
+const BOMB_VIEW_ROLES = new Set(['defuser', 'mute', 'blindop', 'deafsee']);
+// 主区是"手册"的角色
 const EXPERT_ROLES = new Set(['expert', 'blind', 'muteexp', 'expert2', 'expert3']);
+
+/** 占"动手座位"的角色（决定大厅能不能点开始） */
+export function isOperatorRole(role) {
+  return OPERATOR_ROLES.has(role);
+}
+
+/** 能看手册的角色 */
+export function isManualRole(role) {
+  return EXPERT_ROLES.has(role);
+}
 
 /** 主区的标题/图标随角色变化 */
 export function mainTitleForRole(role) {
   if (role === 'blindop') return { icon: '🧭', label: '轮廓' };
   if (EXPERT_ROLES.has(role)) return { icon: '📖', label: '手册' };
-  if (OPERATOR_ROLES.has(role)) return { icon: '💣', label: '炸弹' };
+  if (BOMB_VIEW_ROLES.has(role)) return { icon: '💣', label: '炸弹' };
   return { icon: '💣', label: '炸弹' };
 }
 
