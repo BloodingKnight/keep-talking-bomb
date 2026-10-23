@@ -61,6 +61,7 @@ tests/cloudflare.mjs
 tests/cors.mjs
 tests/deafsee.mjs
 tests/e2e.mjs
+tests/mobile.mjs
 tests/pages-proxy.mjs
 tests/qr.mjs
 tests/rooms.mjs

@@ -756,3 +756,78 @@ code { background: #0d131b; border: 1px solid var(--line); border-radius: 4px; p
   padding: 6px 8px; word-break: break-all; color: #b9d4ff; user-select: all;
 }
 
+
+/* ============================================================
+   手机 / 触屏适配
+   - 网格子项必须能收缩（min-width:0），否则长表格会把整页撑宽
+   - 游戏区把"炸弹/手册"提到最前，聊天垫底，手机上不用先滚过侧栏
+   - 输入框 16px：iOS 聚焦时不会自动把整页放大
+   - 触屏按钮 44px 起步；安全区留给刘海机的手势条
+   ============================================================ */
+@media (max-width: 760px) {
+  html, body { min-height: 100dvh; }
+  .stage { padding: 10px; }
+  #topbar { flex-wrap: wrap; gap: 8px; padding: 8px 10px; position: sticky; top: 0; z-index: 30; backdrop-filter: blur(6px); }
+  .brand-title { font-size: 15px; }
+  .brand-sub { display: none; }
+
+  .lobby-grid > *, .game-grid > *, .bench-grid > * { min-width: 0; }
+
+  .game-grid { display: flex; flex-direction: column; gap: 10px; }
+  #main-area { order: 1; }
+  .game-grid > aside.side:not(.chat-panel) { order: 2; }
+  .game-grid > aside.chat-panel { order: 3; }
+
+  #status-feed { max-height: 22vh; overflow-y: auto; }
+  .signals { max-height: 28vh; overflow-y: auto; }
+
+  .modules { grid-template-columns: 1fr; gap: 10px; }
+  .module { padding: 10px; }
+  .dpad { grid-template-columns: repeat(3, 62px); grid-template-rows: repeat(2, 52px); gap: 8px; }
+  .keypad button, .simon button, .mem-buttons button, .pw-slots button { min-height: 48px; font-size: 16px; }
+  .pw-slots { gap: 4px; }
+  .balance { grid-template-columns: 1fr; }
+
+  .manual-sections { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .manual table { min-width: 100%; }
+  .manual td, .manual th { padding: 5px 6px; font-size: 12.5px; }
+  .casing { flex-wrap: wrap; }
+
+  input, select, textarea { font-size: 16px; min-height: 42px; }
+  button, .btn { min-height: 44px; font-size: 15px; }
+
+  .invite-card { flex-direction: column; align-items: stretch; }
+  .invite-qr svg { width: 168px; height: 168px; margin: 0 auto; }
+  .hud-timer { font-size: 26px; }
+}
+
+@media (max-width: 420px) {
+  .role-cards { grid-template-columns: 1fr; }
+  .mem-buttons { grid-template-columns: repeat(2, 1fr); }
+  .stage { padding: 8px; }
+}
+
+/* 触屏：去掉 300ms 点击延迟、避免误选中文字 */
+@media (pointer: coarse) {
+  button, .btn, .role-card, .clickable, .module button { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+}
+
+/* 刘海机安全区 */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .stage { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  #topbar {
+    padding-left: calc(10px + env(safe-area-inset-left));
+    padding-right: calc(10px + env(safe-area-inset-right));
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+}
+/* 教程页 / 管理页：手机上表格不撑破页面 */
+@media (max-width: 760px) {
+  main.tutorial, main { min-width: 0; }
+  main.tutorial { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  main.tutorial table, .mtable { width: 100%; font-size: 12.5px; }
+  main.tutorial td, main.tutorial th,
+  .mtable td, .mtable th { padding: 5px 6px; }
+  main.tutorial h2 { font-size: 17px; }
+  main.tutorial pre, main.tutorial code { font-size: 12px; }
+}
